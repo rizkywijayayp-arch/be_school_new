@@ -7,12 +7,12 @@ const Catatan = sequelize.define('Catatan', {
   judul: { type: DataTypes.STRING(255) },
   isi: { type: DataTypes.TEXT },
   warna: { type: DataTypes.STRING(20), defaultValue: '#FFFFF9C4' },
-  tanggal: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
-  isPinned: { type: DataTypes.TINYINT, defaultValue: 0 },
-  isArchived: { type: DataTypes.TINYINT, defaultValue: 0 },
-  isChecklist: { type: DataTypes.TINYINT, defaultValue: 0 },
-  checklist: { type: DataTypes.JSON },
-  labels: { type: DataTypes.JSON },
+  tanggal: { type: DataTypes.DATE },
+  isPinned: { type: DataTypes.BOOLEAN, defaultValue: false },
+  isArchived: { type: DataTypes.BOOLEAN, defaultValue: false },
+  isChecklist: { type: DataTypes.BOOLEAN, defaultValue: false },
+  checklist: { type: DataTypes.JSON }, // array of {text, done}
+  labels: { type: DataTypes.JSON }, // array of strings
 }, { timestamps: true, updatedAt: 'updatedAt', createdAt: 'createdAt' });
 
 const CatatanGuru = sequelize.define('CatatanGuru', {
@@ -22,10 +22,10 @@ const CatatanGuru = sequelize.define('CatatanGuru', {
   judul: { type: DataTypes.STRING(255) },
   isi: { type: DataTypes.TEXT },
   warna: { type: DataTypes.STRING(20), defaultValue: '#FFFFF9C4' },
-  tanggal: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
-  isPinned: { type: DataTypes.TINYINT, defaultValue: 0 },
-  isArchived: { type: DataTypes.TINYINT, defaultValue: 0 },
-  isChecklist: { type: DataTypes.TINYINT, defaultValue: 0 },
+  tanggal: { type: DataTypes.DATE },
+  isPinned: { type: DataTypes.BOOLEAN, defaultValue: false },
+  isArchived: { type: DataTypes.BOOLEAN, defaultValue: false },
+  isChecklist: { type: DataTypes.BOOLEAN, defaultValue: false },
   checklist: { type: DataTypes.JSON },
   labels: { type: DataTypes.JSON },
 }, { timestamps: true, updatedAt: 'updatedAt', createdAt: 'createdAt' });

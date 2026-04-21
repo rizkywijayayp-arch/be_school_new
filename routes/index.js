@@ -34,7 +34,7 @@
     const feedRouter = require('./feedRoutes');
     const registerRouter = require('./registerRoutes');
     const siswaRouter = require('./siswaRoutes');
-    const authRouter = require('./authRoutes_new');
+    const authRouter = require('./authRoutes');
 const ortuRouter = require('./ortuDashboardRoutes');
 const izinRouter = require('./izinRoutes');
 const presenceRouter = require('./presenceRoutes');
@@ -58,6 +58,8 @@ const notificationsRouter = require('./notificationsRoutes');
     const faceRouter = require('./face');
     const roleRouter = require('./roleRoutes');
     const healthBridgeRouter = require('./healthBridgeRoutes');
+const makananRouter = require('./makananRoutes');
+const nutrisiRouter = require('./nutrisiRoutes');
 
     router.use('/auth', require('./authRoutes'));
     router.use('/profile', require('./updateProfileRouter'));
@@ -102,6 +104,8 @@ const notificationsRouter = require('./notificationsRoutes');
     router.use('/scan-qr', scanQrStatis);
     router.use('/orang-tua', orangTua);
     router.use('/face', faceRouter);
+    router.use('/makanan', makananRouter);
+    router.use('/nutrisi', nutrisiRouter);
     router.use('/health-bridge', healthBridgeRouter);
     // router.use('/guru', guruRouter); // DISABLED: siswaController missing, Soal model missing
     router.use('/auth-app', authRouter);
