@@ -54,9 +54,25 @@ const Student = sequelize.define('Student', {
     unique: true,
     validate: { isEmail: true } 
   },
-  password: { 
-    type: DataTypes.STRING, 
-    allowNull: true 
+  password: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  // Location tracking consent
+  parentConsent: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    comment: 'Parent consent for child location tracking'
+  },
+  consentTimestamp: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: 'When parent gave consent'
+  },
+  consentIp: {
+    type: DataTypes.STRING(45),
+    allowNull: true,
+    comment: 'IP address when consent was given'
   },
 }, {
   tableName: 'siswa',

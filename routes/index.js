@@ -127,6 +127,7 @@ const notificationsRouter = require('./notificationsRoutes');
     router.use('/visi-misi', visiMisiRouter);
     router.use('/prestasi', prestasiRouter);
     router.use('/attendance', require('./attendanceValidateRoutes'));
+    router.use('/student-location', require('./studentLocationRoutes'));
 
     // Route testing (hanya ikut global limiter dari app.js)
     router.get('/testing', (req, res) => {
