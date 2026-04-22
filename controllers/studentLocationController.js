@@ -26,7 +26,7 @@ exports.getAllLocations = async (req, res) => {
       include: [{
         model: Student,
         as: 'student',
-        attributes: ['id', 'name', 'nis', 'classId']
+        attributes: ['id', 'name', 'nis', 'class']
       }],
       order: [['createdAt', 'DESC']],
       limit: 500
@@ -66,7 +66,7 @@ exports.getLatestLocations = async (req, res) => {
     const studentIds = results.map(r => r.student_id);
     const students = await Student.findAll({
       where: { id: studentIds },
-      attributes: ['id', 'name', 'nis', 'classId']
+      attributes: ['id', 'name', 'nis', 'class']
     });
 
     const studentMap = {};
