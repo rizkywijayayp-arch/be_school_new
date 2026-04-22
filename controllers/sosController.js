@@ -232,7 +232,7 @@ class SOSController {
         return res.status(400).json({ success: false, message: 'schoolId wajib diisi' });
       }
 
-      const where: any = {};
+      const where = {};
 
       // Filter by status
       if (status) {

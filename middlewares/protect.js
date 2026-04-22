@@ -1,6 +1,26 @@
 const jwt = require('jsonwebtoken');
 const SchoolAccount = require('../models/auth');
 
+// Optional auth - allows requests without token
+const optionalAuth = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    req.user = null;
+    return next();
+  }
+
+  const token = authHeader.split(' ')[1];
+
+  try {
+    req.user = jwt.verify(token, process.env.JWT_SECRET);
+  } catch {
+    req.user = null;
+  }
+
+  next();
+};
+
 const protect = async (req, res, next) => {
   try {
     let token;
@@ -40,4 +60,4 @@ const restrictTo = (...roles) => {
 };
 
 // Ensure HANYA ada satu module.exports di akhir file
-module.exports = { protect, restrictTo };
+module.exports = { protect, restrictTo, optionalAuth };

@@ -90,19 +90,8 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 const allowedOrigins = [
-  // Local development
-  "http://localhost:5111",
-  "http://localhost:5222",
-  "http://localhost:5333",
-  "http://localhost:5444",
-  "http://localhost:5555",
-  "http://localhost:5666",
-  "http://localhost:5777",
-  "http://localhost:5888",
-  "http://localhost:5999",
-  "http://localhost:6000",
-  "http://localhost:5005",
   "http://localhost:5173",
+  "http://localhost:5005",
 ];
 
 // Allow all school domains for multi-tenant

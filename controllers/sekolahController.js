@@ -8,7 +8,7 @@ const Presence = require('../models/presence');
 // Get dashboard stats for a school
 exports.getDashboardStats = async (req, res) => {
   try {
-    const schoolId = req.user?.schoolId || req.query.schoolId;
+    const schoolId = req.schoolId || req.user?.schoolId || req.query.schoolId;
 
     if (!schoolId) {
       return res.status(400).json({

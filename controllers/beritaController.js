@@ -10,7 +10,8 @@ cloudinary.config({
 
 exports.getAllNews = async (req, res) => {
   try {
-    const { schoolId } = req.query;
+    // Support both tenant middleware (req.schoolId) and query param
+    const schoolId = req.schoolId || req.query.schoolId;
     if (!schoolId) {
       return res.status(400).json({ success: false, message: 'schoolId wajib disertakan' });
     }
