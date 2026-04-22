@@ -10,7 +10,7 @@ cloudinary.config({
 
 exports.getAllFeeds = async (req, res) => {
   try {
-    const { schoolId } = req.query;
+    const schoolId = req.schoolId || req.query.schoolId;
     if (!schoolId) {
       return res.status(400).json({ success: false, message: 'schoolId wajib ada' });
     }
