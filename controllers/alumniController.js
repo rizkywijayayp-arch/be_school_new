@@ -436,3 +436,106 @@ exports.getAlumniContributors = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
+// Migration: Add missing columns to alumni table
+exports.migrateMissingColumns = async (req, res) => {
+  const sequelize = require('../config/database');
+  try {
+    const queries = [
+      `ALTER TABLE alumni ADD COLUMN IF NOT EXISTS isFeatured BOOLEAN DEFAULT FALSE`,
+      `ALTER TABLE alumni ADD COLUMN IF NOT EXISTS hasStory BOOLEAN DEFAULT FALSE`,
+      `ALTER TABLE alumni ADD COLUMN IF NOT EXISTS university VARCHAR(255) NULL`,
+      `ALTER TABLE alumni ADD COLUMN IF NOT EXISTS currentJob VARCHAR(255) NULL`,
+      `ALTER TABLE alumni ADD COLUMN IF NOT EXISTS story TEXT NULL`,
+      `ALTER TABLE alumni ADD COLUMN IF NOT EXISTS contact VARCHAR(255) NULL`
+    ];
+
+    for (const query of queries) {
+      try {
+        await sequelize.query(query);
+        console.log(`Executed: ${query.substring(0, 50)}...`);
+      } catch (e) {
+        if (!e.message.includes('Duplicate')) {
+          console.error(`Error on: ${query}`, e.message);
+        }
+      }
+    }
+
+    res.json({ success: true, message: 'Migration completed' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Submit alumni contribution/story
+exports.contributeAlumni = async (req, res) => {
+  try {
+    const {
+      schoolId,
+      name,
+      graduationYear,
+      batch,
+      company,
+      position,
+      field,
+      quote,
+      story,
+      linkedin_url,
+      instagram_url
+    } = req.body;
+
+    // Validate required fields
+    if (!name || !graduationYear) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name dan graduationYear wajib diisi'
+      });
+    }
+
+    // Handle photo upload
+    let photoUrl = null;
+    if (req.file) {
+      const result = await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          { resource_type: 'image' },
+          (error, result) => {
+            if (error) reject(error);
+            else resolve(result);
+          }
+        );
+        streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
+      });
+      photoUrl = result.secure_url;
+    }
+
+    // Combine quote and story into story field
+    const fullStory = quote ? `"${quote}" ${story || ''}` : (story || '');
+
+    const alumni = await Alumni.create({
+      schoolId: schoolId ? parseInt(schoolId) : null,
+      name: name.trim(),
+      graduationYear: parseInt(graduationYear),
+      batch: batch || null,
+      description: field || null, // field as description
+      photoUrl: photoUrl,
+      // Map company/position to university/currentJob
+      university: company || null,
+      currentJob: position || null,
+      story: fullStory || null,
+      contact: linkedin_url || instagram_url || null,
+      isActive: false, // Need admin approval
+      isVerified: false,
+      isFeatured: false,
+      hasStory: !!(story || quote)
+    });
+
+    res.json({
+      success: true,
+      data: alumni,
+      message: 'Cerita berhasil disubmit dan menunggu verifikasi admin'
+    });
+  } catch (err) {
+    console.error('Contribute Alumni Error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};

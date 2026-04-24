@@ -28,4 +28,10 @@ router.get('/featured', optionalAuth, alumniController.getFeaturedAlumni);
 router.get('/stats', optionalAuth, alumniController.getAlumniStats);
 router.get('/contributors', optionalAuth, alumniLimiter, alumniController.getAlumniContributors);
 
+// Migration endpoint - fix missing columns
+router.post('/migrate', alumniController.migrateMissingColumns);
+
+// Submit alumni contribution (creates unverified alumni)
+router.post('/contribute', upload.single('photo'), alumniController.contributeAlumni);
+
 module.exports = router;

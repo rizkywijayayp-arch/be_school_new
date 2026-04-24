@@ -380,6 +380,62 @@ exports.login = async (req, res) => {
   }
 };
 
+// ═══════════════════════════════════════════════════════════════════
+// LOGIN KEPALA SEKOLAH
+// ═══════════════════════════════════════════════════════════════════
+exports.loginKepala = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: 'Email dan password wajib diisi' });
+    }
+
+    // Cek di tabel guruTendik dengan role 'kepala'
+    const kepala = await GuruTendik.findOne({
+      where: { email, role: 'kepala' }
+    });
+
+    if (!kepala) {
+      return res.status(401).json({ success: false, message: 'Akun kepala sekolah tidak ditemukan' });
+    }
+
+    // Validasi password
+    if (!(await kepala.validPassword(password))) {
+      return res.status(401).json({ success: false, message: 'Password salah' });
+    }
+
+    // Update last login
+    kepala.lastLogin = new Date();
+    await kepala.save();
+
+    // Generate token
+    const token = jwt.sign(
+      { id: kepala.id, schoolId: kepala.schoolId, role: 'kepala' },
+      process.env.JWT_SECRET,
+      { expiresIn: '365d' }
+    );
+
+    res.json({
+      success: true,
+      message: 'Login berhasil',
+      token,
+      data: {
+        id: kepala.id,
+        nama: kepala.nama,
+        email: kepala.email,
+        telepon: kepala.telepon,
+        foto: kepala.foto,
+        schoolId: kepala.schoolId,
+        role: 'kepala',
+        jabatan: kepala.jabatan || 'Kepala Sekolah',
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 // --- FORGOT PASSWORD ---
 exports.forgotPassword = async (req, res) => {
   try {

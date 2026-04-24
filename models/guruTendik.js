@@ -30,9 +30,17 @@ const GuruTendik = sequelize.define('GuruTendik', {
     allowNull: true,
   },
   isActive: { type: DataTypes.BOOLEAN, defaultValue: true },
-  password: { 
-    type: DataTypes.STRING, 
-    allowNull: true 
+  password: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  resetPasswordToken: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  resetPasswordExpires: {
+    type: DataTypes.DATE,
+    allowNull: true
   },
 }, {
   timestamps: true,

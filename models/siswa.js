@@ -58,6 +58,14 @@ const Student = sequelize.define('Student', {
     type: DataTypes.STRING,
     allowNull: true
   },
+  resetPasswordToken: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  resetPasswordExpires: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
   // Location tracking consent
   parentConsent: {
     type: DataTypes.BOOLEAN,

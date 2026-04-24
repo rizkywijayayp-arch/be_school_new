@@ -15,6 +15,7 @@ const upload = multer({
 // Routes
 router.post('/register', upload.single('logo'), authController.registerSchool);
 router.post('/login', authController.login);
+router.post('/kepala-login', authController.loginKepala); // Login khusus kepala sekolah
 router.get('/profile', protect, authController.getProfile);
 router.post('/forgot-password', authController.forgotPassword);
 router.post('/verify-pin', authController.verifyPin);
