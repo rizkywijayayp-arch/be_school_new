@@ -177,9 +177,6 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Validate API Key for tenant routes
-const { validateApiKey } = require('./middlewares/apiKeyAuth');
-
 // Protected routes that require API key
 app.use('/profileSekolah', validateApiKey);
 
