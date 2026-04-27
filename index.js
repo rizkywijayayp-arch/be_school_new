@@ -195,7 +195,7 @@ if (!fs.existsSync(uploadDir)) {
 app.use('/uploads', express.static(uploadDir));
 
 // ── Hanya 1 baris ini untuk semua routes + limiter mereka ───────
-app.use('/', apiRoutes);
+app.use('/api', apiRoutes);
 
 // =============================================
 // GLOBAL ERROR HANDLER
