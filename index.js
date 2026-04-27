@@ -6,7 +6,13 @@ const fs = require('fs');
 const sequelize = require('./config/database');
 const { createAdapter } = require('@socket.io/redis-adapter');
 const Redis = require('ioredis');
-// const compression = require('compression');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const { securityMiddleware, createAuthLimiter, createAPILimiter } = require('./middlewares/security');
+const { validateApiKey, optionalApiKey } = require('./middlewares/apiKeyAuth');
+
+// Import Tenant model for relations
+const Tenant = require('./models/tenant');
 
 process.on('unhandledRejection', (reason, promise) => {
     console.error('[FATAL ERROR]:', reason instanceof Error ? reason.message : JSON.stringify(reason));
@@ -78,6 +84,55 @@ io.on('connection', (socket) => {
 
 app.set('trust proxy', 1);
 
+// ============================================================
+// SECURITY: Helmet headers
+// ============================================================
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "https:", "blob:"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      connectSrc: ["'self'", "https://be-school.kiraproject.id"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
+
+// Extra security headers
+app.use((req, res, next) => {
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  next();
+});
+
+// ============================================================
+// SECURITY: Global Rate Limiting
+// ============================================================
+const globalLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 200, // 200 requests per minute for general API
+  message: {
+    success: false,
+    message: 'Terlalu banyak request. Silakan tunggu sebentar.',
+    code: 'RATE_LIMIT_EXCEEDED'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use(globalLimiter);
+
+// ============================================================
+// SECURITY: SQL Injection & XSS Protection
+// ============================================================
+app.use(securityMiddleware);
+
 app.use((req, res, next) => {
     if (req.ip?.startsWith('::ffff:')) {
         req.ip = req.ip.replace('::ffff:', '');
@@ -115,12 +170,18 @@ app.use(cors({
     }
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Host'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Host', 'X-API-Key', 'X-School-Id'],
   credentials: true
 }));
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Validate API Key for tenant routes
+const { validateApiKey } = require('./middlewares/apiKeyAuth');
+
+// Protected routes that require API key
+app.use('/profileSekolah', validateApiKey);
 
 // Multi-tenant: resolve schoolId dari domain
 app.use(tenantMiddleware);

@@ -1,18 +1,22 @@
 const express = require('express');
 const router = express.Router();
 const GoogleAuthController = require('../controllers/googleAuthController');
+const { createAuthLimiter } = require('../middlewares/security');
+
+// Rate limiter untuk login endpoint (5 attempts per 15 minutes)
+const loginRateLimiter = createAuthLimiter(5);
 
 // ── Password Login for Siswa ─────────────────────────────────────
-router.post('/login/siswa', GoogleAuthController.loginSiswa);
+router.post('/login/siswa', loginRateLimiter, GoogleAuthController.loginSiswa);
 
 // Forgot Password for Siswa
-router.post('/forgot-password', GoogleAuthController.forgotPassword);
+router.post('/forgot-password', loginRateLimiter, GoogleAuthController.forgotPassword);
 
 // Reset Password for Siswa
 router.post('/reset-password', GoogleAuthController.resetPassword);
 
 // Password Login for Ortu
-router.post('/login/ortu', GoogleAuthController.loginOrtu);
+router.post('/login/ortu', loginRateLimiter, GoogleAuthController.loginOrtu);
 
 // Forgot Password for Ortu
 router.post('/forgot-password/ortu', GoogleAuthController.forgotPasswordOrtu);
@@ -21,7 +25,7 @@ router.post('/forgot-password/ortu', GoogleAuthController.forgotPasswordOrtu);
 router.post('/reset-password/ortu', GoogleAuthController.resetPasswordOrtu);
 
 // Password Login for Guru
-router.post('/login/guru', GoogleAuthController.loginGuru);
+router.post('/login/guru', loginRateLimiter, GoogleAuthController.loginGuru);
 
 // Forgot Password for Guru
 router.post('/forgot-password/guru', GoogleAuthController.forgotPasswordGuru);

@@ -44,7 +44,11 @@ exports.createSchoolProfile = async (req, res) => {
       studentCount, teacherCount, roomCount, achievementCount, latitude, longitude,
       address, phoneNumber, email, kepalaSekolahPhone, kepalaSekolahEmail,
       socialInstagram, socialFacebook, socialTwitter,
-      seoTitle, seoDescription, seoKeywords, ogTitle, ogDescription, ogImage
+      seoTitle, seoDescription, seoKeywords, ogTitle, ogDescription, ogImage,
+      // NEW FIELDS
+      schoolType, schoolTypeLabel, loadingWelcomeText, loadingSubtitleText,
+      themePrimary, themeAccent, themeBg, themeSurface, themeSurfaceText, themeSubtle, themePop,
+      domain, schoolTypeInput
     } = req.body;
 
     if (!schoolId || !heroTitle || !headmasterWelcome || !headmasterName || !schoolName) {
@@ -132,6 +136,19 @@ exports.createSchoolProfile = async (req, res) => {
       ogTitle: ogTitle || null,
       ogDescription: ogDescription || null,
       ogImage: ogImage || null,
+      // NEW FIELDS
+      schoolType: schoolType || null,
+      schoolTypeLabel: schoolTypeLabel || null,
+      loadingWelcomeText: loadingWelcomeText || null,
+      loadingSubtitleText: loadingSubtitleText || null,
+      themePrimary: themePrimary || '#3B82F6',
+      themeAccent: themeAccent || '#FEF08A',
+      themeBg: themeBg || '#FFFFFF',
+      themeSurface: themeSurface || '#FFFFFF',
+      themeSurfaceText: themeSurfaceText || '#334155',
+      themeSubtle: themeSubtle || '#E2E8F0',
+      themePop: themePop || '#F87171',
+      domain: domain || null,
     });
 
     res.status(201).json({ success: true, data: newProfile });
@@ -156,7 +173,11 @@ exports.updateSchoolProfile = async (req, res) => {
       studentCount, teacherCount, roomCount, achievementCount, latitude, longitude,
       address, phoneNumber, email, kepalaSekolahPhone, kepalaSekolahEmail,
       socialInstagram, socialFacebook, socialTwitter,
-      seoTitle, seoDescription, seoKeywords, ogTitle, ogDescription, ogImage
+      seoTitle, seoDescription, seoKeywords, ogTitle, ogDescription, ogImage,
+      // NEW FIELDS
+      schoolType, schoolTypeLabel, loadingWelcomeText, loadingSubtitleText,
+      themePrimary, themeAccent, themeBg, themeSurface, themeSurfaceText, themeSubtle, themePop,
+      domain, schoolTypeInput
     } = req.body;
 
     // Update fields yang dikirim
@@ -203,6 +224,20 @@ exports.updateSchoolProfile = async (req, res) => {
     if (ogTitle !== undefined) profile.ogTitle = ogTitle || null;
     if (ogDescription !== undefined) profile.ogDescription = ogDescription || null;
     if (ogImage !== undefined) profile.ogImage = ogImage || null;
+
+    // NEW FIELDS
+    if (schoolType !== undefined) profile.schoolType = schoolType || null;
+    if (schoolTypeLabel !== undefined) profile.schoolTypeLabel = schoolTypeLabel || null;
+    if (loadingWelcomeText !== undefined) profile.loadingWelcomeText = loadingWelcomeText || null;
+    if (loadingSubtitleText !== undefined) profile.loadingSubtitleText = loadingSubtitleText || null;
+    if (themePrimary !== undefined) profile.themePrimary = themePrimary || '#3B82F6';
+    if (themeAccent !== undefined) profile.themeAccent = themeAccent || '#FEF08A';
+    if (themeBg !== undefined) profile.themeBg = themeBg || '#FFFFFF';
+    if (themeSurface !== undefined) profile.themeSurface = themeSurface || '#FFFFFF';
+    if (themeSurfaceText !== undefined) profile.themeSurfaceText = themeSurfaceText || '#334155';
+    if (themeSubtle !== undefined) profile.themeSubtle = themeSubtle || '#E2E8F0';
+    if (themePop !== undefined) profile.themePop = themePop || '#F87171';
+    if (domain !== undefined) profile.domain = domain || null;
 
 
     // Ganti foto kepala sekolah jika dikirim file baru

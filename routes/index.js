@@ -1,5 +1,6 @@
     const express = require('express');
     const router = express.Router();
+    const { createAuthLimiter, createAPILimiter } = require('../middlewares/security');
 
     // Import semua route handlers
     const albumRouter       = require('./albumRoutes');
@@ -8,7 +9,8 @@
     const beritaRouter      = require('./beritaRoutes');
     const pengumumanRouter  = require('./pengumumanRoutes');
     const fasilitasRouter   = require('./fasilitasRoutes');
-    const profileRouter     = require('./profileSekolahRoutes');   
+    const profileRouter     = require('./profileSekolahRoutes');
+    const tuitionRouter     = require('./tuitionRoutes');   
     const visiMisiRouter     = require('./visiMisiRoutes');   
     const prestasiRouter     = require('./prestasiRoutes');   
     const pramukaRouter     = require('./kegiatanPramukaRoutes');   
@@ -64,6 +66,10 @@ const nutrisiRouter = require('./nutrisiRoutes');
 const deviceRouter = require('./deviceRoutes');
 const contentRouter = require('./contentRoutes');
 const kepalaRouter = require('./kepalaRoutes');
+const tenantRouter = require('./tenantRoutes'); // Tenant management
+const permohonanRouter = require('./permohonanRoutes'); // Permohonan surat
+const kelulusanRouter = require('./kelulusanRoutes'); // Kelulusan siswa
+const appreciateRouter = require('./apresiasiRoutes'); // Apresiasi siswa
 
     router.use('/auth', require('./authRoutes'));
     router.use('/profile', require('./updateProfileRouter'));
@@ -118,6 +124,12 @@ const kepalaRouter = require('./kepalaRoutes');
     // router.use('/guru', guruRouter); // DISABLED: siswaController missing, Soal model missing
     router.use('/auth-app', authRouter);
     router.use('/ortu', ortuRouter);
+
+    // ── Tenant Management (Admin only) ──────────────────────────
+    router.use('/tenant', tenantRouter);
+    router.use('/permohonan', permohonanRouter); // Permohonan surat
+    router.use('/kelulusan', kelulusanRouter); // Kelulusan siswa
+    router.use('/apresiasi', appreciateRouter); // Apresiasi siswa
     router.use('/izin', izinRouter);
     router.use('/presence', presenceRouter);
     router.use('/places', placesRouter);
@@ -136,6 +148,7 @@ const kepalaRouter = require('./kepalaRoutes');
     router.use('/fasilitas', fasilitasRouter);
     router.use('/albums', albumRouter);
     router.use('/profileSekolah', profileRouter);
+    router.use('/tuitions', tuitionRouter);
     router.use('/visi-misi', visiMisiRouter);
     router.use('/prestasi', prestasiRouter);
     router.use('/attendance', require('./attendanceValidateRoutes'));
