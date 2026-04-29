@@ -232,12 +232,15 @@ exports.getProfile = async (req, res) => {
     const userData = user.get({ plain: true });
 
     // 2. Ambil data sekolah secara dinamis
+    let actualSchoolId = null;
     if (role === 'Kepala Sekolah' || role === 'guru' || role === 'Guru' || role === 'Siswa') {
-      // Cari di tabel SchoolAccount berdasarkan schoolId yang ada di profile guru/siswa
       schoolData = await SchoolAccount.findByPk(userData.schoolId);
+      actualSchoolId = userData.schoolId;
     } else {
-      // Jika rolenya admin sekolah, datanya ya dari userData itu sendiri
       schoolData = user;
+      // Untuk admin sekolah, cari schoolId dari schoolprofiles
+      const sp = await SchoolProfile.findOne({ where: { id: userId } });
+      actualSchoolId = sp ? sp.schoolId : userId;
     }
 
     const schoolId = schoolData?.id;
@@ -257,6 +260,7 @@ exports.getProfile = async (req, res) => {
         name: userData.nama || userData.adminName,
         email: userData.email,
         role: role,
+        schoolId: actualSchoolId, // actual schoolId untuk query data (55, 88, dll)
         // Data Sekolah diambil dari instance schoolData
         sekolah: schoolData ? {
           id: schoolData.id,
