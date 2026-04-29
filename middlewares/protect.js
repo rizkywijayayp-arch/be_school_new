@@ -1,21 +1,40 @@
 const jwt = require('jsonwebtoken');
 const SchoolAccount = require('../models/auth');
 
+// Helper: extract actual schoolId from schoolprofiles
+const extractSchoolId = async (userId) => {
+  const SchoolProfile = require('../models/profileSekolah');
+  try {
+    const sp = await SchoolProfile.findOne({ where: { id: userId } });
+    return sp ? sp.schoolId : userId;
+  } catch {
+    return userId;
+  }
+};
+
 // Optional auth - allows requests without token
-const optionalAuth = (req, res, next) => {
+const optionalAuth = async (req, res, next) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     req.user = null;
+    req.schoolId = null;
+    req.enforcedSchoolId = null;
     return next();
   }
 
   const token = authHeader.split(' ')[1];
 
   try {
-    req.user = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    // Set schoolId from token payload (actual data key, e.g. 55)
+    req.schoolId = decoded.schoolId || null;
+    req.enforcedSchoolId = decoded.schoolId || null;
   } catch {
     req.user = null;
+    req.schoolId = null;
+    req.enforcedSchoolId = null;
   }
 
   next();
@@ -33,13 +52,10 @@ const protect = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await SchoolAccount.findByPk(decoded.id);
-
-    if (!user) {
-      return res.status(401).json({ success: false, message: 'User sudah tidak ada' });
-    }
-
-    req.user = user;
+    req.user = decoded;
+    // Set schoolId from token (actual data key)
+    req.schoolId = decoded.schoolId || null;
+    req.enforcedSchoolId = decoded.schoolId || null;
     next();
   } catch (err) {
     return res.status(401).json({ success: false, message: 'Token tidak valid' });
