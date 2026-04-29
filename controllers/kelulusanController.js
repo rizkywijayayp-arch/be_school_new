@@ -730,7 +730,7 @@ exports.setAnnouncementDate = async (req, res) => {
 
     // Store in sekolah settings (assuming Permohonan model has settings field)
     // Or create a separate settings table
-    const sekolah = await Sekolah.findByPk(schoolId);
+    const sekolah = await Sekolah.findOne({ where: { schoolId: parseInt(schoolId) } });
 
     if (!sekolah) {
       return res.status(404).json({ success: false, message: 'Sekolah tidak ditemukan' });
@@ -765,7 +765,7 @@ exports.getAnnouncementDate = async (req, res) => {
       });
     }
 
-    const sekolah = await Sekolah.findByPk(schoolId);
+    const sekolah = await Sekolah.findOne({ where: { schoolId: parseInt(schoolId) } });
 
     if (!sekolah) {
       return res.status(404).json({ success: false, message: 'Sekolah tidak ditemukan' });
