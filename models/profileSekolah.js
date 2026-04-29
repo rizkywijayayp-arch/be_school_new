@@ -68,10 +68,12 @@ const SchoolProfile = sequelize.define('SchoolProfile', {
   ogImage: { type: DataTypes.STRING(500) },
 
   isActive: { type: DataTypes.BOOLEAN, defaultValue: true },
+  settings: { type: DataTypes.JSON, defaultValue: {} },
 }, {
   timestamps: true,
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
+  tableName: 'schoolprofiles',
 });
 
 module.exports = SchoolProfile;
