@@ -17,7 +17,7 @@ const fs = require('fs');
 // Get all kelulusan with pagination and filters
 exports.getKelulusan = async (req, res) => {
   try {
-    const schoolId = req.schoolId || req.enforcedSchoolId;
+    const schoolId = req.schoolId || req.enforcedSchoolId || parseInt(req.query.schoolId) || null;
     const {
       page = 1,
       limit = 50,
@@ -75,7 +75,7 @@ exports.getKelulusan = async (req, res) => {
 // Get single kelulusan by ID
 exports.getKelulusanById = async (req, res) => {
   try {
-    const schoolId = req.schoolId || req.enforcedSchoolId;
+    const schoolId = req.schoolId || req.enforcedSchoolId || parseInt(req.query.schoolId) || null;
     const { id } = req.params;
 
     if (!schoolId) {
@@ -150,7 +150,7 @@ exports.getKelulusanByNisn = async (req, res) => {
 // Create single kelulusan
 exports.createKelulusan = async (req, res) => {
   try {
-    const schoolId = req.schoolId || req.enforcedSchoolId;
+    const schoolId = req.schoolId || req.enforcedSchoolId || parseInt(req.query.schoolId) || null;
 
     if (!schoolId) {
       return res.status(400).json({
@@ -185,7 +185,7 @@ exports.createKelulusan = async (req, res) => {
 // Update kelulusan
 exports.updateKelulusan = async (req, res) => {
   try {
-    const schoolId = req.schoolId || req.enforcedSchoolId;
+    const schoolId = req.schoolId || req.enforcedSchoolId || parseInt(req.query.schoolId) || null;
     const { id } = req.params;
 
     if (!schoolId) {
@@ -246,7 +246,7 @@ exports.updateKelulusan = async (req, res) => {
 // Bulk update status (batch update)
 exports.bulkUpdateStatus = async (req, res) => {
   try {
-    const schoolId = req.schoolId || req.enforcedSchoolId;
+    const schoolId = req.schoolId || req.enforcedSchoolId || parseInt(req.query.schoolId) || null;
     const { ids, status, nomorSurat } = req.body;
 
     if (!schoolId) {
@@ -314,7 +314,7 @@ exports.bulkUpdateStatus = async (req, res) => {
 // Delete kelulusan (soft delete)
 exports.deleteKelulusan = async (req, res) => {
   try {
-    const schoolId = req.schoolId || req.enforcedSchoolId;
+    const schoolId = req.schoolId || req.enforcedSchoolId || parseInt(req.query.schoolId) || null;
     const { id } = req.params;
 
     if (!schoolId) {
@@ -344,7 +344,7 @@ exports.deleteKelulusan = async (req, res) => {
 // Import Excel
 exports.importExcel = async (req, res) => {
   try {
-    const schoolId = req.schoolId || req.enforcedSchoolId;
+    const schoolId = req.schoolId || req.enforcedSchoolId || parseInt(req.query.schoolId) || null;
 
     if (!schoolId) {
       return res.status(400).json({
@@ -478,7 +478,7 @@ exports.importExcel = async (req, res) => {
 // Get students for graduation (auto detect final class based on jenjang)
 exports.getStudentsForGraduation = async (req, res) => {
   try {
-    const schoolId = req.schoolId || req.enforcedSchoolId;
+    const schoolId = req.schoolId || req.enforcedSchoolId || parseInt(req.query.schoolId) || null;
     const { jenjang } = req.query;
     const sequelize = require('../config/database');
     const { Op } = require('sequelize');
@@ -539,7 +539,7 @@ exports.getStudentsForGraduation = async (req, res) => {
 // Add students to kelulusan
 exports.addStudentsToKelulusan = async (req, res) => {
   try {
-    const schoolId = req.schoolId || req.enforcedSchoolId;
+    const schoolId = req.schoolId || req.enforcedSchoolId || parseInt(req.query.schoolId) || null;
     const { studentIds = [], jenjang } = req.body;
 
     if (!schoolId) {
@@ -663,7 +663,7 @@ exports.addStudentsToKelulusan = async (req, res) => {
 // Get statistics
 exports.getStats = async (req, res) => {
   try {
-    const schoolId = req.schoolId || req.enforcedSchoolId;
+    const schoolId = req.schoolId || req.enforcedSchoolId || parseInt(req.query.schoolId) || null;
 
     if (!schoolId) {
       return res.status(400).json({
@@ -718,7 +718,7 @@ exports.getStats = async (req, res) => {
 // Set announcement date
 exports.setAnnouncementDate = async (req, res) => {
   try {
-    const schoolId = req.schoolId || req.enforcedSchoolId;
+    const schoolId = req.schoolId || req.enforcedSchoolId || parseInt(req.query.schoolId) || null;
 
     if (!schoolId) {
       return res.status(400).json({
@@ -756,7 +756,7 @@ exports.setAnnouncementDate = async (req, res) => {
 // Get announcement date
 exports.getAnnouncementDate = async (req, res) => {
   try {
-    const schoolId = req.schoolId || req.enforcedSchoolId;
+    const schoolId = req.schoolId || req.enforcedSchoolId || parseInt(req.query.schoolId) || null;
 
     if (!schoolId) {
       return res.status(400).json({
@@ -792,7 +792,7 @@ exports.getAnnouncementDate = async (req, res) => {
 // Auto-promote students (end of academic year)
 exports.promoteStudents = async (req, res) => {
   try {
-    const schoolId = req.schoolId || req.enforcedSchoolId;
+    const schoolId = req.schoolId || req.enforcedSchoolId || parseInt(req.query.schoolId) || null;
     const { jenjang } = req.body;
 
     if (!schoolId) {
@@ -998,7 +998,7 @@ exports.promoteStudents = async (req, res) => {
 // Get promotion preview (what will happen)
 exports.getPromotionPreview = async (req, res) => {
   try {
-    const schoolId = req.schoolId || req.enforcedSchoolId;
+    const schoolId = req.schoolId || req.enforcedSchoolId || parseInt(req.query.schoolId) || null;
     const { jenjang } = req.query;
 
     if (!schoolId) {
