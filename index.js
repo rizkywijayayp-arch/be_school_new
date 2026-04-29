@@ -33,7 +33,9 @@ Student.belongsTo(Parent, { foreignKey: 'parentId', as: 'parent' });
 // Import semua routes dari satu file
 const apiRoutes = require('./routes');  // → routes/index.js
 const { initWhatsApp } = require('./config/whatsapp');
-const { tenantMiddleware, enforceTenant } = require('./middlewares/tenant');
+
+// NOTE: Tenant middleware commented out due to DB schema mismatch
+// const { tenantMiddleware, enforceTenant } = require('./middlewares/tenant');
 
 const app = express();
 const port = process.env.PORT || 5005;
@@ -180,19 +182,14 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // Protected routes that require API key
 app.use('/profileSekolah', validateApiKey);
 
-// Multi-tenant: resolve schoolId dari domain
-app.use(tenantMiddleware);
-app.use(enforceTenant);
-
-// Static folder
-const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-app.use('/uploads', express.static(uploadDir));
-
 // ── Hanya 1 baris ini untuk semua routes + limiter mereka ───────
 app.use('/api', apiRoutes);
+
+// NOTE: Tenant middleware commented out due to DB schema mismatch
+// To re-enable: need to add schoolType column to profile_sekolah table
+// const { tenantMiddleware, enforceTenant } = require('./middlewares/tenant');
+// app.use(tenantMiddleware);
+// app.use(enforceTenant);
 
 // =============================================
 // GLOBAL ERROR HANDLER

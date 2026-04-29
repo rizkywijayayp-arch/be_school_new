@@ -353,8 +353,21 @@ exports.login = async (req, res) => {
       attributes: ['vision', 'missions'],
     });
 
+    // Ambil sekolah profile untuk dapat actual schoolId (sekolah.id di tabel sekolah)
+    // schoolprofiles.id = sekolah.id (frontend) = SchoolAccount.id
+    // schoolprofiles.schoolId = actual data schoolId (siswa/guru/school tables)
+    const schoolProfile = await SchoolProfile.findOne({
+      where: { id: user.id },
+    });
+    const actualSchoolId = schoolProfile?.schoolId || user.id;
+
+    // sekolah.id = schoolprofiles.id = user.id (untuk frontend)
+    const sekolah = await SchoolAccount.findByPk(user.id, {
+      attributes: ['id', 'schoolName', 'email', 'logoUrl'],
+    });
+
     const token = jwt.sign(
-      { id: user.id, schoolId: user.id },
+      { id: user.id, schoolId: actualSchoolId },
       process.env.JWT_SECRET,
       { expiresIn: '365d' }
     );
@@ -368,11 +381,18 @@ exports.login = async (req, res) => {
         username: user.adminName,
         email: user.email,
         schoolName: user.schoolName,
+        schoolId: actualSchoolId, // actual schoolId untuk query API (55, 88, dll)
         logoUrl: user.logoUrl,
         lat: user.latitude,
         long: user.longitude,
         role: user.role,
-        visionMission: visionMission || null, // null jika belum diisi
+        visionMission: visionMission || null,
+        sekolah: sekolah ? {
+          id: sekolah.id,
+          schoolName: sekolah.schoolName,
+          email: sekolah.email,
+          logoUrl: sekolah.logoUrl,
+        } : null,
       },
     });
   } catch (err) {

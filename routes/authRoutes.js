@@ -5,8 +5,8 @@ const protect = require('../middlewares/auth'); // Import middleware
 const { createAuthLimiter } = require('../middlewares/security');
 const router = express.Router();
 
-// Rate limiter untuk endpoint login (5 attempts per 15 minutes)
-const authRateLimiter = createAuthLimiter(5);
+// Rate limiter dengan limit lebih longgar (100 attempts per 15 minutes)
+const authRateLimiter = createAuthLimiter(100);
 
 // Gunakan memory storage (sama dengan alumni)
 const storage = multer.memoryStorage();

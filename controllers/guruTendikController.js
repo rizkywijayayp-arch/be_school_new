@@ -29,11 +29,13 @@ const invalidateGuruTendikCache = async (schoolId) => {
 
 exports.checkGuruAuth = async (req, res) => {
   try {
-    const { email, password } = req.body;
-    
+    const { email, phoneNumber, password } = req.body;
+    // Accept phoneNumber or email as login identifier
+    const identifier = email || phoneNumber;
+
     // 1. Cari Guru berdasarkan email
     const guru = await GuruTendik.findOne({
-      where: { email, isActive: true }
+      where: { email: identifier, isActive: true }
     });
 
     if (!guru) {

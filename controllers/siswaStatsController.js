@@ -1,5 +1,6 @@
 const Kehadiran = require('../models/kehadiran');
 const Siswa = require('../models/siswa');
+const sequelize = require('../config/database');
 const { Op } = require('sequelize');
 
 class SiswaStatsController {
@@ -243,42 +244,51 @@ class SiswaStatsController {
     }
   }
 
-  // Get attendance report for admin dashboard
+  // Get attendance report for admin dashboard (raw SQL)
   async getAttendanceReport(req, res) {
     try {
-      const { schoolId, class: kelas, month, year, page = 1, limit = 50 } = req.query;
+      const { schoolId, class: kelas, month, year, page = 1, limit = 50, date } = req.query;
       const enforcedSchoolId = schoolId || req.enforcedSchoolId;
 
       if (!enforcedSchoolId) {
         return res.status(400).json({ success: false, message: 'schoolId required' });
       }
 
-      const offset = (parseInt(page) - 1) * parseInt(limit);
-      const whereClause = {};
+      const offset = (Math.max(1, parseInt(page)) - 1) * Math.min(200, Math.max(1, parseInt(limit)));
+      const lim = Math.min(200, Math.max(1, parseInt(limit)));
+      let where = `k.schoolId = ${parseInt(enforcedSchoolId)}`;
+      if (month) where += ` AND MONTH(DATE(k.createdAt)) = ${parseInt(month)}`;
+      if (year) where += ` AND YEAR(DATE(k.createdAt)) = ${parseInt(year)}`;
+      if (date) where += ` AND DATE(k.createdAt) = '${date}'`;
+      if (kelas) where += ` AND s.class = '${kelas.replace(/'/g, "''")}'`;
 
-      if (month) whereClause.month = month;
-      if (year) whereClause.year = year;
+      const [rows] = await sequelize.query(`
+        SELECT k.id, k.schoolId, k.studentId, k.status, k.createdAt as tanggal,
+               s.name as siswaName, s.nis, s.class
+        FROM kehadiran k
+        LEFT JOIN siswa s ON k.studentId = s.id
+        WHERE ${where}
+        ORDER BY k.createdAt DESC
+        LIMIT ${lim} OFFSET ${offset}
+      `);
 
-      const { count, rows } = await Kehadiran.findAndCountAll({
-        where: whereClause,
-        include: [{
-          model: Siswa,
-          where: { schoolId: parseInt(enforcedSchoolId) },
-          required: true
-        }],
-        order: [['tanggal', 'DESC']],
-        limit: parseInt(limit),
-        offset,
-      });
+      const [countResult] = await sequelize.query(`
+        SELECT COUNT(*) as total
+        FROM kehadiran k
+        LEFT JOIN siswa s ON k.studentId = s.id
+        WHERE ${where}
+      `);
+
+      const total = countResult?.[0]?.total || 0;
 
       return res.json({
         success: true,
-        data: rows,
+        data: rows || [],
         pagination: {
-          total: count,
+          total,
           page: parseInt(page),
-          limit: parseInt(limit),
-          pages: Math.ceil(count / parseInt(limit)),
+          limit: lim,
+          pages: Math.ceil(total / lim),
         },
       });
     } catch (err) {
@@ -286,7 +296,7 @@ class SiswaStatsController {
     }
   }
 
-  // Get early warning for students with low attendance
+  // Get early warning for students with low attendance (raw SQL - no Sequelize associations needed)
   async getEarlyWarning(req, res) {
     try {
       const { schoolId } = req.query;
@@ -296,35 +306,40 @@ class SiswaStatsController {
         return res.status(400).json({ success: false, message: 'schoolId required' });
       }
 
-      // Get attendance stats per student
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const dateStr = thirtyDaysAgo.toISOString().slice(0, 19).replace('T', ' ');
 
-      const students = await Siswa.findAll({
-        where: { schoolId: parseInt(enforcedSchoolId) },
-        attributes: ['id', 'name', 'nisn'],
-        include: [{
-          model: Kehadiran,
-          where: { tanggal: { [Op.gte]: thirtyDaysAgo } },
-          required: false
-        }]
-      });
+      const [rows] = await sequelize.query(`
+        SELECT
+          s.id as siswaId,
+          s.name,
+          s.nisn,
+          COUNT(k.id) as totalDays,
+          SUM(CASE WHEN k.status = 'hadir' THEN 1 ELSE 0 END) as hadirDays
+        FROM siswa s
+        LEFT JOIN kehadiran k ON s.id = k.studentId AND DATE(k.createdAt) >= '${dateStr}'
+        WHERE s.schoolId = ${parseInt(enforcedSchoolId)} AND s.isActive = 1
+        GROUP BY s.id, s.name, s.nisn
+        HAVING totalDays > 0 AND (hadirDays / totalDays) < 0.9
+        ORDER BY (hadirDays / totalDays) ASC
+        LIMIT 100
+      `);
 
-      const warnings = students.map(student => {
-        const totalDays = student.kehadirans?.length || 0;
-        const hadir = student.kehadirans?.filter(k => k.status === 'hadir').length || 0;
-        const presentRate = totalDays > 0 ? (hadir / totalDays) * 100 : 0;
-
+      const warnings = (rows || []).map(r => {
+        const totalDays = parseInt(r.totalDays) || 0;
+        const hadirDays = parseInt(r.hadirDays) || 0;
+        const presentRate = totalDays > 0 ? (hadirDays / totalDays) * 100 : 0;
         return {
-          siswaId: student.id,
-          name: student.name,
-          nisn: student.nisn,
+          siswaId: r.siswaId,
+          name: r.name,
+          nisn: r.nisn,
           totalDays,
-          hadirDays: hadir,
+          hadirDays,
           presentRate: Math.round(presentRate),
           status: presentRate < 75 ? 'danger' : presentRate < 90 ? 'warning' : 'good'
         };
-      }).filter(s => s.presentRate < 90);
+      });
 
       return res.json({ success: true, data: warnings });
     } catch (err) {
@@ -332,7 +347,7 @@ class SiswaStatsController {
     }
   }
 
-  // Get students with consecutive absent days
+  // Get students with consecutive absent days (raw SQL)
   async getConsecutiveAbsent(req, res) {
     try {
       const { schoolId, minDays = 3, page = 1, limit = 20 } = req.query;
@@ -344,32 +359,30 @@ class SiswaStatsController {
 
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - parseInt(minDays));
+      const dateStr = thirtyDaysAgo.toISOString().slice(0, 19).replace('T', ' ');
+      const offset = (Math.max(1, parseInt(page)) - 1) * Math.min(100, Math.max(1, parseInt(limit)));
+      const lim = Math.min(100, Math.max(1, parseInt(limit)));
 
-      const students = await Siswa.findAll({
-        where: { schoolId: parseInt(enforcedSchoolId) },
-        attributes: ['id', 'name', 'nisn'],
-        include: [{
-          model: Kehadiran,
-          where: { tanggal: { [Op.gte]: thirtyDaysAgo } },
-          required: false
-        }]
-      });
+      const [rows] = await sequelize.query(`
+        SELECT
+          s.id, s.name, s.nisn,
+          SUM(CASE WHEN k.status != 'hadir' THEN 1 ELSE 0 END) as absentDays
+        FROM siswa s
+        LEFT JOIN kehadiran k ON s.id = k.studentId AND DATE(k.createdAt) >= '${dateStr}'
+        WHERE s.schoolId = ${parseInt(enforcedSchoolId)} AND s.isActive = 1
+        GROUP BY s.id, s.name, s.nisn
+        HAVING absentDays >= ${parseInt(minDays)}
+        ORDER BY absentDays DESC
+        LIMIT ${lim} OFFSET ${offset}
+      `);
 
-      const absentStudents = students
-        .map(student => {
-          const absentDays = student.kehadirans?.filter(k => k.status !== 'hadir').length || 0;
-          return { ...student.toJSON(), absentDays };
-        })
-        .filter(s => s.absentDays >= parseInt(minDays))
-        .slice((parseInt(page) - 1) * parseInt(limit), parseInt(page) * parseInt(limit));
-
-      return res.json({ success: true, data: absentStudents });
+      return res.json({ success: true, data: rows || [] });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
     }
   }
 
-  // Get students with low attendance rate
+  // Get students with low attendance rate (raw SQL)
   async getLowAttendance(req, res) {
     try {
       const { schoolId, threshold = 75, page = 1, limit = 20 } = req.query;
@@ -381,34 +394,38 @@ class SiswaStatsController {
 
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const dateStr = thirtyDaysAgo.toISOString().slice(0, 19).replace('T', ' ');
+      const offset = (Math.max(1, parseInt(page)) - 1) * Math.min(100, Math.max(1, parseInt(limit)));
+      const lim = Math.min(100, Math.max(1, parseInt(limit)));
 
-      const students = await Siswa.findAll({
-        where: { schoolId: parseInt(enforcedSchoolId) },
-        attributes: ['id', 'name', 'nisn'],
-        include: [{
-          model: Kehadiran,
-          where: { tanggal: { [Op.gte]: thirtyDaysAgo } },
-          required: false
-        }]
+      const [rows] = await sequelize.query(`
+        SELECT
+          s.id, s.name, s.nisn,
+          COUNT(k.id) as totalDays,
+          SUM(CASE WHEN k.status = 'hadir' THEN 1 ELSE 0 END) as hadir
+        FROM siswa s
+        LEFT JOIN kehadiran k ON s.id = k.studentId AND DATE(k.createdAt) >= '${dateStr}'
+        WHERE s.schoolId = ${parseInt(enforcedSchoolId)} AND s.isActive = 1
+        GROUP BY s.id, s.name, s.nisn
+        HAVING totalDays > 0 AND (SUM(CASE WHEN k.status = 'hadir' THEN 1 ELSE 0 END) / totalDays) < ${parseFloat(threshold) / 100}
+        ORDER BY (SUM(CASE WHEN k.status = 'hadir' THEN 1 ELSE 0 END) / totalDays) ASC
+        LIMIT ${lim} OFFSET ${offset}
+      `);
+
+      const data = (rows || []).map(r => {
+        const totalDays = parseInt(r.totalDays) || 0;
+        const hadir = parseInt(r.hadir) || 0;
+        const presentRate = totalDays > 0 ? Math.round((hadir / totalDays) * 100) : 0;
+        return { ...r, totalDays, hadir, presentRate };
       });
 
-      const lowAttendance = students
-        .map(student => {
-          const totalDays = student.kehadirans?.length || 0;
-          const hadir = student.kehadirans?.filter(k => k.status === 'hadir').length || 0;
-          const presentRate = totalDays > 0 ? (hadir / totalDays) * 100 : 0;
-          return { ...student.toJSON(), totalDays, hadir, presentRate: Math.round(presentRate) };
-        })
-        .filter(s => s.presentRate < parseInt(threshold))
-        .slice((parseInt(page) - 1) * parseInt(limit), parseInt(page) * parseInt(limit));
-
-      return res.json({ success: true, data: lowAttendance });
+      return res.json({ success: true, data });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
     }
   }
 
-  // Get students with frequent late arrivals
+  // Get students with frequent late arrivals (raw SQL)
   async getFrequentLate(req, res) {
     try {
       const { schoolId, minPerWeek = 2, page = 1, limit = 20 } = req.query;
@@ -420,32 +437,31 @@ class SiswaStatsController {
 
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const dateStr = thirtyDaysAgo.toISOString().slice(0, 19).replace('T', ' ');
+      const offset = (Math.max(1, parseInt(page)) - 1) * Math.min(100, Math.max(1, parseInt(limit)));
+      const lim = Math.min(100, Math.max(1, parseInt(limit)));
 
-      const students = await Siswa.findAll({
-        where: { schoolId: parseInt(enforcedSchoolId) },
-        attributes: ['id', 'name', 'nisn'],
-        include: [{
-          model: Kehadiran,
-          where: { tanggal: { [Op.gte]: thirtyDaysAgo }, status: 'terlambat' },
-          required: false
-        }]
-      });
+      const [rows] = await sequelize.query(`
+        SELECT
+          s.id, s.name, s.nisn,
+          COUNT(k.id) as lateCount
+        FROM siswa s
+        LEFT JOIN kehadiran k ON s.id = k.studentId AND DATE(k.createdAt) >= '${dateStr}' AND k.status = 'terlambat'
+        WHERE s.schoolId = ${parseInt(enforcedSchoolId)} AND s.isActive = 1
+        GROUP BY s.id, s.name, s.nisn
+        HAVING lateCount >= ${parseInt(minPerWeek)}
+        ORDER BY lateCount DESC
+        LIMIT ${lim} OFFSET ${offset}
+      `);
 
-      const frequentLate = students
-        .map(student => {
-          const lateCount = student.kehadirans?.length || 0;
-          return { ...student.toJSON(), lateCount };
-        })
-        .filter(s => s.lateCount >= parseInt(minPerWeek))
-        .slice((parseInt(page) - 1) * parseInt(limit), parseInt(page) * parseInt(limit));
-
-      return res.json({ success: true, data: frequentLate });
+      const data = (rows || []).map(r => ({ ...r, lateCount: parseInt(r.lateCount) || 0 }));
+      return res.json({ success: true, data });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
     }
   }
 
-  // Get recap per class
+  // Get recap per class (raw SQL - no Sequelize model associations needed)
   async getRecapKelas(req, res) {
     try {
       const { schoolId, date } = req.query;
@@ -455,51 +471,40 @@ class SiswaStatsController {
         return res.status(400).json({ success: false, message: 'schoolId required' });
       }
 
-      const { Op } = require('sequelize');
-      const Kelas = require('../models/kelas');
+      const dateFilter = date ? ` AND DATE(k.createdAt) = '${date}'` : '';
 
-      const whereClause = { schoolId: parseInt(enforcedSchoolId) };
-      if (date) {
-        whereClause.tanggal = date;
-      }
+      const [rows] = await sequelize.query(`
+        SELECT
+          k.currentClass as namaKelas,
+          COUNT(DISTINCT s.id) as totalSiswa,
+          COUNT(k.id) as totalKehadiran,
+          SUM(CASE WHEN k.status = 'hadir' THEN 1 ELSE 0 END) as hadir,
+          SUM(CASE WHEN k.status = 'izin' THEN 1 ELSE 0 END) as izin,
+          SUM(CASE WHEN k.status = 'sakit' THEN 1 ELSE 0 END) as sakit,
+          SUM(CASE WHEN k.status = 'alpha' THEN 1 ELSE 0 END) as alpha,
+          SUM(CASE WHEN k.status = 'terlambat' THEN 1 ELSE 0 END) as terlambat
+        FROM kehadiran k
+        LEFT JOIN siswa s ON k.studentId = s.id AND s.isActive = 1 ${dateFilter}
+        WHERE k.schoolId = ${parseInt(enforcedSchoolId)} ${dateFilter}
+        GROUP BY k.currentClass
+        ORDER BY k.currentClass ASC
+        LIMIT 100
+      `);
 
-      const kelasList = await Kelas.findAll({
-        where: { schoolId: parseInt(enforcedSchoolId) },
-        attributes: ['id', 'namaKelas']
-      });
-
-      const recap = await Promise.all(kelasList.map(async (kelas) => {
-        const students = await Siswa.findAll({
-          where: { kelasId: kelas.id },
-          attributes: ['id']
-        });
-        const studentIds = students.map(s => s.id);
-
-        const attendances = await Kehadiran.findAll({
-          where: {
-            siswaId: { [Op.in]: studentIds },
-            ...(date ? { tanggal: date } : {})
-          }
-        });
-
-        const hadir = attendances.filter(a => a.status === 'hadir').length;
-        const izin = attendances.filter(a => a.status === 'izin').length;
-        const sakit = attendances.filter(a => a.status === 'sakit').length;
-        const alpha = attendances.filter(a => a.status === 'alpha').length;
-        const terlambat = attendances.filter(a => a.status === 'terlambat').length;
-
+      const recap = (rows || []).map(r => {
+        const totalSiswa = parseInt(r.totalSiswa) || 0;
+        const hadir = parseInt(r.hadir) || 0;
         return {
-          kelasId: kelas.id,
-          namaKelas: kelas.namaKelas,
-          totalSiswa: studentIds.length,
+          namaKelas: r.namaKelas,
+          totalSiswa,
           hadir,
-          izin,
-          sakit,
-          alpha,
-          terlambat,
-          presentRate: studentIds.length > 0 ? Math.round((hadir / studentIds.length) * 100) : 0
+          izin: parseInt(r.izin) || 0,
+          sakit: parseInt(r.sakit) || 0,
+          alpha: parseInt(r.alpha) || 0,
+          terlambat: parseInt(r.terlambat) || 0,
+          presentRate: totalSiswa > 0 ? Math.round((hadir / totalSiswa) * 100) : 0
         };
-      }));
+      });
 
       return res.json({ success: true, data: recap });
     } catch (err) {
@@ -507,7 +512,7 @@ class SiswaStatsController {
     }
   }
 
-  // Get global statistics
+  // Get global statistics (raw SQL)
   async getGlobalStats(req, res) {
     try {
       const { schoolId } = req.query;
@@ -517,30 +522,35 @@ class SiswaStatsController {
         return res.status(400).json({ success: false, message: 'schoolId required' });
       }
 
-      const { Op } = require('sequelize');
-
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const dateStr = thirtyDaysAgo.toISOString().slice(0, 19).replace('T', ' ');
 
-      const totalSiswa = await Siswa.count({
-        where: { schoolId: parseInt(enforcedSchoolId) }
-      });
+      const [totalResult] = await sequelize.query(`
+        SELECT COUNT(*) as total FROM siswa WHERE schoolId = ${parseInt(enforcedSchoolId)} AND isActive = 1
+      `);
+      const totalSiswa = totalResult?.[0]?.total || 0;
 
-      const attendances = await Kehadiran.findAll({
-        where: { tanggal: { [Op.gte]: thirtyDaysAgo } },
-        include: [{
-          model: Siswa,
-          where: { schoolId: parseInt(enforcedSchoolId) },
-          required: true
-        }]
-      });
+      const [statsResult] = await sequelize.query(`
+        SELECT
+          COUNT(*) as totalAttendances,
+          SUM(CASE WHEN status = 'hadir' THEN 1 ELSE 0 END) as hadir,
+          SUM(CASE WHEN status = 'izin' THEN 1 ELSE 0 END) as izin,
+          SUM(CASE WHEN status = 'sakit' THEN 1 ELSE 0 END) as sakit,
+          SUM(CASE WHEN status = 'alpha' THEN 1 ELSE 0 END) as alpha,
+          SUM(CASE WHEN status = 'terlambat' THEN 1 ELSE 0 END) as terlambat
+        FROM kehadiran k
+        LEFT JOIN siswa s ON k.studentId = s.id
+        WHERE k.schoolId = ${parseInt(enforcedSchoolId)} AND DATE(k.createdAt) >= '${dateStr}'
+      `);
 
-      const totalAttendances = attendances.length;
-      const hadir = attendances.filter(a => a.status === 'hadir').length;
-      const izin = attendances.filter(a => a.status === 'izin').length;
-      const sakit = attendances.filter(a => a.status === 'sakit').length;
-      const alpha = attendances.filter(a => a.status === 'alpha').length;
-      const terlambat = attendances.filter(a => a.status === 'terlambat').length;
+      const stats = statsResult?.[0] || {};
+      const totalAttendances = parseInt(stats.totalAttendances) || 0;
+      const hadir = parseInt(stats.hadir) || 0;
+      const izin = parseInt(stats.izin) || 0;
+      const sakit = parseInt(stats.sakit) || 0;
+      const alpha = parseInt(stats.alpha) || 0;
+      const terlambat = parseInt(stats.terlambat) || 0;
 
       return res.json({
         success: true,
@@ -593,7 +603,7 @@ class SiswaStatsController {
     }
   }
 
-  // Share recap progress via WhatsApp
+  // Share recap progress via WhatsApp (raw SQL)
   async shareRekapProgress(req, res) {
     try {
       const { schoolId } = req.query;
@@ -605,22 +615,25 @@ class SiswaStatsController {
 
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const dateStr = thirtyDaysAgo.toISOString().slice(0, 19).replace('T', ' ');
 
-      const totalSiswa = await Siswa.count({
-        where: { schoolId: parseInt(enforcedSchoolId) }
-      });
+      const [totalResult] = await sequelize.query(`
+        SELECT COUNT(*) as total FROM siswa WHERE schoolId = ${parseInt(enforcedSchoolId)} AND isActive = 1
+      `);
+      const totalSiswa = totalResult?.[0]?.total || 0;
 
-      const attendances = await Kehadiran.findAll({
-        where: { tanggal: { [Op.gte]: thirtyDaysAgo } },
-        include: [{
-          model: Siswa,
-          where: { schoolId: parseInt(enforcedSchoolId) },
-          required: true
-        }]
-      });
+      const [statsResult] = await sequelize.query(`
+        SELECT COUNT(*) as total,
+               SUM(CASE WHEN k.status = 'hadir' THEN 1 ELSE 0 END) as hadir
+        FROM kehadiran k
+        LEFT JOIN siswa s ON k.studentId = s.id
+        WHERE k.schoolId = ${parseInt(enforcedSchoolId)} AND DATE(k.createdAt) >= '${dateStr}'
+      `);
 
-      const hadir = attendances.filter(a => a.status === 'hadir').length;
-      const presentRate = attendances.length > 0 ? Math.round((hadir / attendances.length) * 100) : 0;
+      const stats = statsResult?.[0] || {};
+      const total = parseInt(stats.total) || 0;
+      const hadir = parseInt(stats.hadir) || 0;
+      const presentRate = total > 0 ? Math.round((hadir / total) * 100) : 0;
 
       const recapText = `📊 *Rekap Kehadiran 30 Hari*\n\n` +
         `🏫 Total Siswa: ${totalSiswa}\n` +
@@ -634,7 +647,7 @@ class SiswaStatsController {
     }
   }
 
-  // Share recap via specific channel (WA/sms/email)
+  // Share recap via specific channel (raw SQL)
   async shareRekap(req, res) {
     try {
       const { schoolId, date, via } = req.query;
@@ -644,36 +657,31 @@ class SiswaStatsController {
         return res.status(400).json({ success: false, message: 'schoolId required' });
       }
 
-      const { Op } = require('sequelize');
+      let dateFilter = '';
+      if (date) dateFilter = ` AND DATE(k.createdAt) = '${date}'`;
 
-      const kelasList = await require('../models/kelas').findAll({
-        where: { schoolId: parseInt(enforcedSchoolId) },
-        attributes: ['id', 'namaKelas']
-      });
+      const [rows] = await sequelize.query(`
+        SELECT
+          s.class as kelas,
+          COUNT(DISTINCT s.id) as total,
+          SUM(CASE WHEN k.status = 'hadir' THEN 1 ELSE 0 END) as hadir
+        FROM siswa s
+        LEFT JOIN kehadiran k ON s.id = k.studentId ${dateFilter.replace(' AND ', ' AND k.')}
+        WHERE s.schoolId = ${parseInt(enforcedSchoolId)} AND s.isActive = 1 ${dateFilter}
+        GROUP BY s.class
+        ORDER BY s.class ASC
+      `);
 
-      const recap = await Promise.all(kelasList.map(async (kelas) => {
-        const students = await Siswa.findAll({
-          where: { kelasId: kelas.id },
-          attributes: ['id']
-        });
-        const studentIds = students.map(s => s.id);
-
-        const whereClause = {
-          siswaId: { [Op.in]: studentIds },
-          ...(date ? { tanggal: date } : {})
-        };
-
-        const attendances = await Kehadiran.findAll({ where: whereClause });
-
-        const hadir = attendances.filter(a => a.status === 'hadir').length;
-
+      const recap = (rows || []).map(r => {
+        const total = parseInt(r.total) || 0;
+        const hadir = parseInt(r.hadir) || 0;
         return {
-          kelas: kelas.namaKelas,
+          kelas: r.kelas,
           hadir,
-          total: studentIds.length,
-          rate: studentIds.length > 0 ? Math.round((hadir / studentIds.length) * 100) : 0
+          total,
+          rate: total > 0 ? Math.round((hadir / total) * 100) : 0
         };
-      }));
+      });
 
       return res.json({ success: true, data: { recap, via: via || 'wa' } });
     } catch (err) {

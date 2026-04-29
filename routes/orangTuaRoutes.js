@@ -3,8 +3,8 @@ const router = express.Router();
 const parentController = require('../controllers/orangTuaController');
 const { createAuthLimiter } = require('../middlewares/security');
 
-// Rate limiter untuk login
-const authRateLimiter = createAuthLimiter(5);
+// Rate limiter dengan limit lebih longgar (100 attempts per 15 minutes)
+const authRateLimiter = createAuthLimiter(100);
 
 router.get('/', parentController.getAllParents);
 router.post('/', parentController.createParent);

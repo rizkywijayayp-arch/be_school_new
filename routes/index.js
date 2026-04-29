@@ -40,6 +40,7 @@
 const ortuRouter = require('./ortuDashboardRoutes');
 const izinRouter = require('./izinRoutes');
 const presenceRouter = require('./presenceRoutes');
+const presenceHistoryRouter = require('./presenceHistoryRoutes');
 const placesRouter = require('./placesZonesRoutes');
 const zonesRouter = require('./zonesRoutes');
 const catatanRouter = require('./catatanRoutes');
@@ -70,6 +71,13 @@ const tenantRouter = require('./tenantRoutes'); // Tenant management
 const permohonanRouter = require('./permohonanRoutes'); // Permohonan surat
 const kelulusanRouter = require('./kelulusanRoutes'); // Kelulusan siswa
 const appreciateRouter = require('./apresiasiRoutes'); // Apresiasi siswa
+const raporRouter = require('./raporRoutes'); // Rapor siswa
+const userSiswaRouter = require('./userSiswaRoutes'); // user-siswa alias
+const biodataSiswaRouter = require('./biodataSiswaRoutes'); // biodata-siswa-new
+const barcodeAbsenRouter = require('./barcodeAbsenRoutes'); // create-barcode-absen
+const attendancesRouter = require('./attendancesRoutes'); // attendances
+const manualAttendanceRouter = require('./manualAttendanceRoutes'); // absen-masuk/pulang-manual
+const mataPelajaranRouter = require('./mataPelajaranRoutes'); // mata-pelajaran
 
     router.use('/auth', require('./authRoutes'));
     router.use('/profile', require('./updateProfileRouter'));
@@ -89,6 +97,7 @@ const appreciateRouter = require('./apresiasiRoutes'); // Apresiasi siswa
     router.use('/admin', admin);
     router.use('/roles', roleRouter);
     router.use('/guruTendik', guruTendikRouter);
+    router.use('/guru-mapel', guruTendikRouter); // Alias for guru-mapel endpoint
     router.use('/ppdb', ppdbRouter);
     router.use('/osis', osisRouter);
     router.use('/wa', waRouter);
@@ -130,11 +139,21 @@ const appreciateRouter = require('./apresiasiRoutes'); // Apresiasi siswa
     router.use('/permohonan', permohonanRouter); // Permohonan surat
     router.use('/kelulusan', kelulusanRouter); // Kelulusan siswa
     router.use('/apresiasi', appreciateRouter); // Apresiasi siswa
+    router.use('/rapor', raporRouter); // Rapor siswa
+    router.use('/user-siswa', userSiswaRouter); // user-siswa alias for admin
+    router.use('/get-biodata-siswa-new', biodataSiswaRouter); // biodata siswa for attendance
+    router.use('/create-barcode-absen', barcodeAbsenRouter); // QR barcode attendance
+    router.use('/attendances', attendancesRouter); // attendances/monthly, daily
+    router.use('/absen-masuk-manual', manualAttendanceRouter); // manual check-in
+    router.use('/absen-pulang-manual', manualAttendanceRouter); // manual check-out
+    router.use('/mata-pelajaran', mataPelajaranRouter); // mata pelajaran / guru-mapel
     router.use('/izin', izinRouter);
     router.use('/presence', presenceRouter);
+    router.use('/presence', presenceHistoryRouter); // /presence/history, /presence/stats
     router.use('/places', placesRouter);
     router.use('/zones', zonesRouter);
     router.use('/catatan', catatanRouter);
+    router.use('/catatan-sikap', catatanRouter); // Alias for admin dashboard
     router.use('/materi', materiRouter);
     router.use('/kuis', kuisRouter);
     router.use('/perpustakaan', perpustakaanRouter);

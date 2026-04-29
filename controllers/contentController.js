@@ -1,4 +1,4 @@
-const { content: Content } = require('../models');
+const Content = require('../models/appContent');
 
 const contentController = {
   // Get all content
@@ -120,9 +120,6 @@ const contentController = {
             { question: 'Bagaimana cara memilih sekolah?', answer: 'Sekolah dipilih saat pertama kali login dan tidak dapat diubah. Hubungi admin jika perlu perubahan.' },
             { question: 'Cara update profil?', answer: 'Tap Edit Profile, ubah data yang diperlukan. Nama harus sesuai identitas untuk kartu pelajar.' },
           ],
-          contact_info: { email: 'support@nayaka.id', phone: '+6281234567890', address: 'PT Nayaka Haga Media, Jakarta' },
-        },
-      ],
           contact_info: { email: 'support@nayaka.id', phone: '+6281234567890', address: 'PT Nayaka Haga Media, Jakarta' },
         },
         {

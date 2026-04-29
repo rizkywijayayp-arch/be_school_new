@@ -8,8 +8,6 @@ const SchoolProfile = sequelize.define('SchoolProfile', {
 
   // Basic Info
   schoolName: { type: DataTypes.STRING(255), allowNull: false },
-  schoolType: { type: DataTypes.STRING(50) }, // "smk", "sma", "smp"
-  schoolTypeLabel: { type: DataTypes.STRING(100) }, // "Sekolah Menengah Kejuruan Negeri"
   headmasterName: { type: DataTypes.STRING(255), allowNull: false },
   kepalaSekolahPhone: { type: DataTypes.STRING(20) },
   kepalaSekolahEmail: { type: DataTypes.STRING(100) },

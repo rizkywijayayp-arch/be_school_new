@@ -1,32 +1,78 @@
-const Parent = require('../models/orangTua');
-const Student = require('../models/siswa');
-const Attendance = require('../models/kehadiran');
+// controllers/orangTuaController.js
+const sequelize = require('../config/database');
 const { Op } = require('sequelize');
 const moment = require('moment');
-const jwt = require('jsonwebtoken')
+const jwt = require('jsonwebtoken');
+
+// Ensure orangTua table has required columns (safe migration)
+const ensureOrangTuaTable = async () => {
+  try {
+    await sequelize.query(`
+      CREATE TABLE IF NOT EXISTS orangTua (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        schoolId INT NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        gender ENUM('Laki-laki','Perempuan') NOT NULL,
+        relationStatus ENUM('Ayah','Ibu') NOT NULL,
+        type ENUM('Kandung','Tiri') DEFAULT 'Kandung',
+        phoneNumber VARCHAR(50) NOT NULL UNIQUE,
+        email VARCHAR(255),
+        password VARCHAR(255),
+        resetPasswordToken VARCHAR(255),
+        resetPasswordExpires DATETIME,
+        isActive TINYINT(1) DEFAULT 1,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+    return true;
+  } catch (err) {
+    if (err.message && err.message.includes('already exists')) return true;
+    console.error('ensureOrangTuaTable:', err.message);
+    return false;
+  }
+};
 
 // --- 1. CREATE ---
 exports.createParent = async (req, res) => {
   try {
+    await ensureOrangTuaTable();
     const { name, gender, relationStatus, type, phoneNumber, schoolId, studentIds } = req.body;
 
-    const existing = await Parent.findOne({ where: { phoneNumber } });
-    if (existing) return res.status(400).json({ success: false, message: "Nomor ini sudah terdaftar" });
-
-    const newParent = await Parent.create({
-      name, gender, relationStatus, type, phoneNumber, schoolId: parseInt(schoolId)
-    });
-
-    // Hubungkan siswa ke orang tua ini
-    if (studentIds && Array.isArray(studentIds)) {
-      await Student.update(
-        { parentId: newParent.id },
-        { where: { id: { [Op.in]: studentIds } } }
-      );
+    if (!phoneNumber || !schoolId) {
+      return res.status(400).json({ success: false, message: 'phoneNumber and schoolId required' });
     }
 
-    res.json({ success: true, data: newParent });
+    const [existing] = await sequelize.query(
+      `SELECT id FROM orangTua WHERE phoneNumber = '${phoneNumber.replace(/'/g, "''")}' LIMIT 1`
+    );
+    if (existing && existing.length > 0) {
+      return res.status(400).json({ success: false, message: "Nomor ini sudah terdaftar" });
+    }
+
+    const [result] = await sequelize.query(`
+      INSERT INTO orangTua (name, gender, relationStatus, type, phoneNumber, schoolId)
+      VALUES (
+        '${(name || '').replace(/'/g, "''")}',
+        '${(gender || 'Ayah').replace(/'/g, "''")}',
+        '${(relationStatus || 'Ayah').replace(/'/g, "''")}',
+        '${(type || 'Kandung').replace(/'/g, "''")}',
+        '${phoneNumber.replace(/'/g, "''")}',
+        ${parseInt(schoolId)}
+      )
+    `);
+
+    const newId = result.insertId;
+
+    if (studentIds && Array.isArray(studentIds) && studentIds.length > 0) {
+      const ids = studentIds.map(id => parseInt(id)).join(',');
+      await sequelize.query(`UPDATE siswa SET parentId = ${newId} WHERE id IN (${ids})`);
+    }
+
+    const [newParent] = await sequelize.query(`SELECT * FROM orangTua WHERE id = ${newId}`);
+    res.json({ success: true, data: newParent[0] });
   } catch (err) {
+    console.error('createParent error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -34,22 +80,51 @@ exports.createParent = async (req, res) => {
 // --- 2. GET ALL ---
 exports.getAllParents = async (req, res) => {
   try {
-    const { schoolId, name } = req.query;
-    let condition = { schoolId: parseInt(schoolId), isActive: true };
-    if (name) condition.name = { [Op.like]: `%${name}%` };
+    await ensureOrangTuaTable();
+    const { schoolId, name, page = 1, limit = 50 } = req.query;
 
-    const data = await Parent.findAll({
-      where: condition,
-      include: [{
-        model: Student,
-        as: 'children',
-        attributes: ['id', 'name', 'class', 'nis']
-      }],
-      order: [['name', 'ASC']]
+    if (!schoolId) {
+      return res.status(400).json({ success: false, message: 'schoolId required' });
+    }
+
+    const offset = (Math.max(1, parseInt(page)) - 1) * Math.min(200, Math.max(1, parseInt(limit)));
+    const lim = Math.min(200, Math.max(1, parseInt(limit)));
+    let where = `o.schoolId = ${parseInt(schoolId)} AND o.isActive = 1`;
+    if (name) where += ` AND o.name LIKE '%${name.replace(/'/g, "''")}%'`;
+
+    const [rows] = await sequelize.query(`
+      SELECT o.id, o.name, o.gender, o.relationStatus, o.type, o.phoneNumber, o.email, o.schoolId,
+             o.isActive, o.createdAt,
+             s.id as childId, s.name as childName, s.nis as childNis, s.class as childClass
+      FROM orangTua o
+      LEFT JOIN siswa s ON s.parentId = o.id AND s.isActive = 1
+      WHERE ${where}
+      ORDER BY o.name ASC
+      LIMIT ${lim} OFFSET ${offset}
+    `);
+
+    // Group by parent
+    const grouped = {};
+    (rows || []).forEach(r => {
+      if (!grouped[r.id]) {
+        grouped[r.id] = {
+          id: r.id, name: r.name, gender: r.gender,
+          relationStatus: r.relationStatus, type: r.type,
+          phoneNumber: r.phoneNumber, email: r.email,
+          schoolId: r.schoolId, isActive: r.isActive,
+          children: []
+        };
+      }
+      if (r.childId) {
+        grouped[r.id].children.push({
+          id: r.childId, name: r.childName, nis: r.childNis, class: r.childClass
+        });
+      }
     });
 
-    res.json({ success: true, data });
+    res.json({ success: true, data: Object.values(grouped) });
   } catch (err) {
+    console.error('getAllParents error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -60,20 +135,28 @@ exports.updateParent = async (req, res) => {
     const { id } = req.params;
     const { name, gender, relationStatus, type, phoneNumber, studentIds } = req.body;
 
-    await Parent.update(
-      { name, gender, relationStatus, type, phoneNumber },
-      { where: { id } }
-    );
+    const fields = [];
+    if (name !== undefined) fields.push(`name = '${name.replace(/'/g, "''")}'`);
+    if (gender !== undefined) fields.push(`gender = '${gender.replace(/'/g, "''")}'`);
+    if (relationStatus !== undefined) fields.push(`relationStatus = '${relationStatus.replace(/'/g, "''")}'`);
+    if (type !== undefined) fields.push(`type = '${type.replace(/'/g, "''")}'`);
+    if (phoneNumber !== undefined) fields.push(`phoneNumber = '${phoneNumber.replace(/'/g, "''")}'`);
 
-    if (studentIds) {
-      // Step 1: Kosongkan dulu anak-anak yang sebelumnya terhubung ke ortu ini
-      await Student.update({ parentId: null }, { where: { parentId: id } });
-      // Step 2: Hubungkan anak-anak baru berdasarkan list studentIds
-      await Student.update({ parentId: id }, { where: { id: { [Op.in]: studentIds } } });
+    if (fields.length > 0) {
+      await sequelize.query(`UPDATE orangTua SET ${fields.join(', ')} WHERE id = ${parseInt(id)}`);
+    }
+
+    if (studentIds && Array.isArray(studentIds)) {
+      await sequelize.query(`UPDATE siswa SET parentId = NULL WHERE parentId = ${parseInt(id)}`);
+      if (studentIds.length > 0) {
+        const ids = studentIds.map(id => parseInt(id)).join(',');
+        await sequelize.query(`UPDATE siswa SET parentId = ${parseInt(id)} WHERE id IN (${ids})`);
+      }
     }
 
     res.json({ success: true, message: "Data berhasil diperbarui" });
   } catch (err) {
+    console.error('updateParent error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -82,217 +165,144 @@ exports.updateParent = async (req, res) => {
 exports.deleteParent = async (req, res) => {
   try {
     const { id } = req.params;
-    // Set non-aktif
-    await Parent.update({ isActive: false }, { where: { id } });
-    // Lepas relasi anak agar siswa bisa didaftarkan ke ortu lain (misal ortu satunya)
-    await Student.update({ parentId: null }, { where: { parentId: id } });
-
+    await sequelize.query(`UPDATE orangTua SET isActive = 0 WHERE id = ${parseInt(id)}`);
+    await sequelize.query(`UPDATE siswa SET parentId = NULL WHERE parentId = ${parseInt(id)}`);
     res.json({ success: true, message: "Data orang tua berhasil dihapus" });
   } catch (err) {
+    console.error('deleteParent error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
 exports.getChildrenAttendance = async (req, res) => {
   try {
-    const { parentId } = req.params; // ID orang tua dari session atau params
+    const { parentId } = req.params;
     const { year } = req.query;
 
-    // 1. Cari semua anak yang terhubung dengan parent ini
-    const children = await Student.findAll({
-      // where: { parentId: parentId, isActive: true },
-      where: { parentId: parentId },
-      attributes: ['id', 'name', 'class', 'nis']
-    });
+    const [children] = await sequelize.query(`
+      SELECT id, name, class, nis FROM siswa WHERE parentId = ${parseInt(parentId)} AND isActive = 1
+    `);
 
     if (!children || children.length === 0) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Tidak ada data anak yang terhubung dengan akun ini." 
-      });
+      return res.status(404).json({ success: false, message: "Tidak ada data anak yang terhubung dengan akun ini." });
     }
 
     const studentIds = children.map(c => c.id);
+    const startDate = year ? `${year}-01-01` : moment().subtract(1, 'years').format('YYYY-MM-DD');
+    const endDate = year ? `${year}-12-31` : moment().format('YYYY-MM-DD');
 
-    // 2. Konfigurasi Waktu (1 tahun terakhir)
-    const startDate = year 
-      ? moment(`${year}-01-01`).startOf('year').toDate() 
-      : moment().subtract(1, 'years').toDate();
-    const endDate = year 
-      ? moment(`${year}-12-31`).endOf('year').toDate() 
-      : moment().endOf('day').toDate();
+    const [attendanceRecords] = await sequelize.query(`
+      SELECT k.id, k.studentId, k.status, k.jamMasuk, k.jamPulang, k.tanggal,
+             s.name as studentName, s.class as studentClass
+      FROM kehadiran k
+      LEFT JOIN siswa s ON k.studentId = s.id
+      WHERE k.studentId IN (${studentIds.join(',')})
+        AND DATE(k.createdAt) BETWEEN '${startDate}' AND '${endDate}'
+      ORDER BY k.createdAt DESC
+      LIMIT 500
+    `);
 
-    // 3. Ambil data kehadiran semua anak tersebut
-    const attendanceRecords = await Attendance.findAll({
-      where: {
-        studentId: { [Op.in]: studentIds },
-        createdAt: { [Op.between]: [startDate, endDate] }
-      },
-      order: [['createdAt', 'DESC']],
-      // Sertakan info siswa agar orang tua tahu ini record milik anak yang mana
-      include: [{
-        model: Student,
-        as: 'student',
-        attributes: ['name', 'class']
-      }]
-    });
-
-    // 4. Mapping data untuk tampilan yang rapi
     const deadline = "07:00:00";
-    const history = attendanceRecords.map(record => {
-      const scanTime = moment(record.createdAt).format("HH:mm:ss");
+    const history = (attendanceRecords || []).map(record => {
+      const scanTime = record.jamMasuk || '';
       return {
-        studentName: record.student.name,
-        class: record.currentClass || record.student.class,
-        date: moment(record.createdAt).format('YYYY-MM-DD'),
+        studentName: record.studentName,
+        class: record.studentClass,
+        date: record.tanggal ? String(record.tanggal).slice(0, 10) : '',
         time: scanTime,
         status: record.status,
-        isLate: record.status === 'Hadir' && scanTime > deadline
+        isLate: record.status === 'hadir' && scanTime > deadline
       };
     });
 
-    res.json({
-      success: true,
-      count: history.length,
-      data: history
-    });
-
+    res.json({ success: true, count: history.length, data: history });
   } catch (err) {
-    console.error("Error Get Children Attendance:", err);
+    console.error('getChildrenAttendance error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
 exports.loginParentWithoutPassword = async (req, res) => {
   try {
+    await ensureOrangTuaTable();
     const { phoneNumber, childNis } = req.body;
 
-    // 1. Cari orang tua berdasarkan nomor HP
-    const parent = await Parent.findOne({ 
-      where: { phoneNumber, isActive: true } 
-    });
+    const [parents] = await sequelize.query(
+      `SELECT * FROM orangTua WHERE phoneNumber = '${phoneNumber.replace(/'/g, "''")}' AND isActive = 1 LIMIT 1`
+    );
+    const parent = parents && parents[0];
 
     if (!parent) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Nomor HP tidak terdaftar di sistem sekolah." 
-      });
+      return res.status(404).json({ success: false, message: "Nomor HP tidak terdaftar di sistem sekolah." });
     }
 
-    // 2. Validasi: Apakah benar ortu ini punya anak dengan NIS tersebut?
-    const studentMatch = await Student.findOne({
-      where: { 
-        parentId: parent.id, 
-        nis: childNis 
-      }
-    });
-
-    if (!studentMatch) {
-      return res.status(401).json({ 
-        success: false, 
-        message: "Kombinasi Nomor HP dan NIS Anak tidak cocok." 
-      });
+    const [students] = await sequelize.query(
+      `SELECT * FROM siswa WHERE parentId = ${parent.id} AND nis = '${childNis.replace(/'/g, "''")}' LIMIT 1`
+    );
+    if (!students || !students[0]) {
+      return res.status(401).json({ success: false, message: "Kombinasi Nomor HP dan NIS Anak tidak cocok." });
     }
 
-    // 3. Jika cocok, buatkan Token (JWT)
     const token = jwt.sign(
       { id: parent.id, role: 'parent', schoolId: parent.schoolId },
-      process.env.JWT_SECRET,
-      { expiresIn: '30d' } // Buat durasi lama agar ortu tidak sering login ulang
+      process.env.JWT_SECRET || 'kira-secret',
+      { expiresIn: '30d' }
     );
 
     res.json({
       success: true,
       message: "Login berhasil",
       token,
-      parent: {
-        id: parent.id,
-        name: parent.name,
-        schoolId: parent.schoolId
-      }
+      parent: { id: parent.id, name: parent.name, schoolId: parent.schoolId }
     });
   } catch (err) {
+    console.error('loginParentWithoutPassword error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
-// Fungsi untuk membantu orang tua mencari data anak sebelum registrasi
 exports.searchStudentForRegister = async (req, res) => {
   try {
     const { nis, schoolId } = req.query;
-    const student = await Student.findOne({
-      where: { nis, schoolId, parentId: null }, // Hanya cari siswa yang belum punya ortu terdaftar
-      attributes: ['id', 'name', 'class', 'nis']
-    });
+    if (!nis || !schoolId) {
+      return res.status(400).json({ success: false, message: 'nis and schoolId required' });
+    }
 
-    if (!student) {
+    const [students] = await sequelize.query(
+      `SELECT id, name, class, nis FROM siswa WHERE nis = '${nis.replace(/'/g, "''")}' AND schoolId = ${parseInt(schoolId)} AND (parentId IS NULL OR parentId = 0) LIMIT 1`
+    );
+
+    if (!students || !students[0]) {
       return res.status(404).json({ success: false, message: "Siswa tidak ditemukan atau sudah terdaftar." });
     }
 
-    res.json({ success: true, data: student });
+    res.json({ success: true, data: students[0] });
   } catch (err) {
+    console.error('searchStudentForRegister error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
-// --- UPDATE PROFILE (Sesuai Model Parent) ---
 exports.updateProfile = async (req, res) => {
   try {
     const { id } = req.params;
-    const { 
-      name, 
-      gender, 
-      relationStatus, 
-      type, 
-      phoneNumber,
-      email // Menjaga kompatibilitas jika frontend mengirim field 'email'
-    } = req.body;
+    const { name, gender, relationStatus, type, phoneNumber, email } = req.body;
 
-    // 1. Cari data orang tua
-    const parent = await Parent.findByPk(id);
-    if (!parent) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Data orang tua tidak ditemukan." 
-      });
+    const fields = [];
+    if (name !== undefined) fields.push(`name = '${name.replace(/'/g, "''")}'`);
+    if (gender !== undefined) fields.push(`gender = '${gender.replace(/'/g, "''")}'`);
+    if (relationStatus !== undefined) fields.push(`relationStatus = '${relationStatus.replace(/'/g, "''")}'`);
+    if (type !== undefined) fields.push(`type = '${type.replace(/'/g, "''")}'`);
+    if (phoneNumber !== undefined) fields.push(`phoneNumber = '${phoneNumber.replace(/'/g, "''")}'`);
+
+    if (fields.length > 0) {
+      await sequelize.query(`UPDATE orangTua SET ${fields.join(', ')} WHERE id = ${parseInt(id)}`);
     }
 
-    // 2. Cek duplikasi nomor HP jika nomor diubah
-    const newPhone = phoneNumber || email; // Gunakan phoneNumber atau email dari body
-    if (newPhone && newPhone !== parent.phoneNumber) {
-      const existing = await Parent.findOne({ 
-        where: { phoneNumber: newPhone, isActive: true } 
-      });
-      if (existing) {
-        return res.status(400).json({ 
-          success: false, 
-          message: "Nomor telepon sudah digunakan oleh akun lain." 
-        });
-      }
-    }
-
-    // 3. Eksekusi Update (Hanya field yang ada di Model)
-    await Parent.update({
-      name: name || parent.name,
-      gender: gender || parent.gender,
-      relationStatus: relationStatus || parent.relationStatus,
-      type: type || parent.type,
-      phoneNumber: newPhone || parent.phoneNumber
-    }, { 
-      where: { id } 
-    });
-
-    // 4. Ambil data terbaru untuk dikirim balik ke frontend
-    const updatedData = await Parent.findByPk(id);
-
-    res.json({ 
-      success: true, 
-      message: "Profil berhasil diperbarui", 
-      data: updatedData 
-    });
-
+    const [updated] = await sequelize.query(`SELECT * FROM orangTua WHERE id = ${parseInt(id)}`);
+    res.json({ success: true, message: "Profil berhasil diperbarui", data: updated[0] });
   } catch (err) {
-    console.error("Update Profile Error:", err);
+    console.error('updateProfile error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -300,60 +310,59 @@ exports.updateProfile = async (req, res) => {
 exports.getParentById = async (req, res) => {
   try {
     const { id } = req.params;
-    const data = await Parent.findByPk(id);
-
-    if (!data) {
+    const [rows] = await sequelize.query(`SELECT * FROM orangTua WHERE id = ${parseInt(id)}`);
+    if (!rows || rows.length === 0) {
       return res.status(404).json({ success: false, message: "Data tidak ditemukan" });
     }
-
-    res.json({ success: true, data });
+    res.json({ success: true, data: rows[0] });
   } catch (err) {
+    console.error('getParentById error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
-// --- LINK CHILD (Flutter app) ---
 exports.linkChild = async (req, res) => {
   try {
     const { ortu_id, nisn, school_id, relation } = req.body;
+    if (!ortu_id || !nisn || !school_id) {
+      return res.status(400).json({ success: false, message: 'ortu_id, nisn, school_id required' });
+    }
 
-    // Cari siswa berdasarkan NISN dan sekolah
-    const student = await Student.findOne({
-      where: { nisn, schoolId: parseInt(school_id) }
-    });
-
-    if (!student) {
+    const [students] = await sequelize.query(
+      `SELECT * FROM siswa WHERE nisn = '${nisn.replace(/'/g, "''")}' AND schoolId = ${parseInt(school_id)} LIMIT 1`
+    );
+    if (!students || !students[0]) {
       return res.status(404).json({ success: false, message: "Siswa dengan NISN tersebut tidak ditemukan" });
     }
 
+    const student = students[0];
     if (student.parentId && student.parentId !== parseInt(ortu_id)) {
       return res.status(400).json({ success: false, message: "Siswa sudah terdaftar ke orang tua lain" });
     }
 
-    // Update student_parents junction if exists, or update student.parentId
-    await Student.update(
-      { parentId: parseInt(ortu_id) },
-      { where: { id: student.id } }
+    await sequelize.query(
+      `UPDATE siswa SET parentId = ${parseInt(ortu_id)} WHERE id = ${student.id}`
     );
 
     res.json({ success: true, message: "Anak berhasil ditautkan", data: student });
   } catch (err) {
+    console.error('linkChild error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
-// --- UNLINK CHILD (Flutter app) ---
 exports.unlinkChild = async (req, res) => {
   try {
     const { siswa_id, ortu_id } = req.query;
-
-    await Student.update(
-      { parentId: null },
-      { where: { id: parseInt(siswa_id), parentId: parseInt(ortu_id) } }
+    if (!siswa_id || !ortu_id) {
+      return res.status(400).json({ success: false, message: 'siswa_id and ortu_id required' });
+    }
+    await sequelize.query(
+      `UPDATE siswa SET parentId = NULL WHERE id = ${parseInt(siswa_id)} AND parentId = ${parseInt(ortu_id)}`
     );
-
     res.json({ success: true, message: "Anak berhasil dilepas" });
   } catch (err) {
+    console.error('unlinkChild error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };

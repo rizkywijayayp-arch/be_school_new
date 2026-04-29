@@ -45,7 +45,7 @@ const globalLimiter = rateLimit({
 
 const loginLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
-  limit: 15,
+  limit: 100,
   skipSuccessfulRequests: true,
   store: makeRedisStore('rl:login:'),
   keyGenerator: (req) => {
