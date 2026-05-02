@@ -7,12 +7,12 @@ const router = express.Router();
 const { protect, optionalAuth } = require('../middlewares/protect');
 const arsipSuratController = require('../controllers/arsipSuratController');
 
-// Public tracking (optional auth)
-router.get('/', optionalAuth, arsipSuratController.getArsipSurat);
-router.get('/stats', optionalAuth, arsipSuratController.getStats);
-router.get('/next-nomor', optionalAuth, arsipSuratController.getNextNomor);
-router.get('/klasifikasi', optionalAuth, arsipSuratController.getKlasifikasi);
-router.get('/:id', optionalAuth, arsipSuratController.getDetail);
+// Auth required — schoolId dari JWT/header wajib
+router.get('/', protect, arsipSuratController.getArsipSurat);
+router.get('/stats', protect, arsipSuratController.getStats);
+router.get('/next-nomor', protect, arsipSuratController.getNextNomor);
+router.get('/klasifikasi', protect, arsipSuratController.getKlasifikasi);
+router.get('/:id', protect, arsipSuratController.getDetail);
 
 // Admin only
 router.post('/', protect, arsipSuratController.create);

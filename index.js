@@ -34,8 +34,9 @@ Student.belongsTo(Parent, { foreignKey: 'parentId', as: 'parent' });
 const apiRoutes = require('./routes');  // → routes/index.js
 const { initWhatsApp } = require('./config/whatsapp');
 
-// NOTE: Tenant middleware commented out due to DB schema mismatch
-// const { tenantMiddleware, enforceTenant } = require('./middlewares/tenant');
+// NOTE: Tenant middleware re-enabled 2026-05-03 after schema verification
+// schoolprofiles table exists with schoolId and domain columns ✓
+const { tenantMiddleware, enforceTenant } = require('./middlewares/tenant');
 
 const app = express();
 const port = process.env.PORT || 5005;
@@ -179,17 +180,18 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// NOTE: Tenant middleware re-enabled 2026-05-03 after schema verification
+// schoolprofiles table exists with schoolId and domain columns ✓
+const { tenantMiddleware, enforceTenant } = require('./middlewares/tenant');
+
+// ── Tenant resolution via domain (non-API routes like landing pages) ──
+app.use(tenantMiddleware);
+
 // Protected routes that require API key
 app.use('/profileSekolah', validateApiKey);
 
 // ── Hanya 1 baris ini untuk semua routes + limiter mereka ───────
-app.use('/api', apiRoutes);
-
-// NOTE: Tenant middleware commented out due to DB schema mismatch
-// To re-enable: need to add schoolType column to profile_sekolah table
-// const { tenantMiddleware, enforceTenant } = require('./middlewares/tenant');
-// app.use(tenantMiddleware);
-// app.use(enforceTenant);
+app.use('/api', enforceTenant, apiRoutes);
 
 // =============================================
 // GLOBAL ERROR HANDLER

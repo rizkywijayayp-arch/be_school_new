@@ -16,7 +16,7 @@ const tenantMiddleware = async (req, res, next) => {
 
     // Use raw query to avoid Sequelize model definition issues
     const [rows] = await sequelize.query(
-      'SELECT id, schoolId, domain FROM profile_sekolah WHERE domain = ? LIMIT 1',
+      'SELECT id, schoolId, domain FROM schoolprofiles WHERE domain = ? LIMIT 1',
       { replacements: [domain] }
     );
 
@@ -66,18 +66,18 @@ const enforceTenant = async (req, res, next) => {
   if (hasSchoolIdHeader) {
     const headerSchoolId = parseInt(req.headers['x-school-id'], 10);
 
-    if (req.user?.sekolahId !== undefined) {
-      if (headerSchoolId !== req.user.sekolahId) {
-        return res.status(403).json({
-          success: false,
-          message: 'X-School-Id does not match authenticated tenant',
-          code: 'TENANT_MISMATCH',
-          detail: {
-            headerSchoolId,
-            jwtSchoolId: req.user.sekolahId
-          }
-        });
-      }
+    // Check both sekolahId and schoolId (different JWT implementations)
+    const jwtSchoolId = req.user?.sekolahId ?? req.user?.schoolId;
+    if (jwtSchoolId !== undefined && headerSchoolId !== jwtSchoolId) {
+      return res.status(403).json({
+        success: false,
+        message: 'X-School-Id does not match authenticated tenant',
+        code: 'TENANT_MISMATCH',
+        detail: {
+          headerSchoolId,
+          jwtSchoolId
+        }
+      });
     }
 
     // Use the validated header schoolId

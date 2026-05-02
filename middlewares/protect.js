@@ -53,9 +53,9 @@ const protect = async (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded;
-    // Set schoolId from token (actual data key)
-    req.schoolId = decoded.schoolId || null;
-    req.enforcedSchoolId = decoded.schoolId || null;
+    // Set schoolId from token — supports both 'sekolahId' and 'schoolId' keys
+    req.schoolId = decoded.schoolId ?? decoded.sekolahId ?? null;
+    req.enforcedSchoolId = decoded.schoolId ?? decoded.sekolahId ?? null;
     next();
   } catch (err) {
     return res.status(401).json({ success: false, message: 'Token tidak valid' });
