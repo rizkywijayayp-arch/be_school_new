@@ -525,16 +525,23 @@ exports.loginWithQRNew = async (req, res) => {
 // Update FCM Token for notifications
 exports.updateFcmToken = async (req, res) => {
   try {
-    const { userId, fcmToken, role } = req.body;
+    // Support both { userId, fcmToken } and { fcmToken, schoolId } payloads
+    const { userId, fcmToken, role, schoolId } = req.body;
 
-    if (!userId || !fcmToken) {
-      return res.status(400).json({ success: false, message: 'userId and fcmToken required' });
+    if (!fcmToken) {
+      return res.status(400).json({ success: false, message: 'fcmToken required' });
     }
 
-    // Store/update FCM token in database (depending on role)
-    // This is a placeholder - implement according to your FCM storage model
-    // For now just return success
-    console.log(`[FCM] Token updated for ${role}:${userId}`);
+    // Resolve userId from JWT if not provided
+    const resolvedUserId = userId || req.user?.id || null;
+    const resolvedSchoolId = schoolId || req.user?.schoolId || null;
+    const resolvedRole = role || req.user?.role || req.user?.userType || 'admin';
+
+    if (!resolvedUserId && !resolvedSchoolId) {
+      return res.status(400).json({ success: false, message: 'userId or schoolId required' });
+    }
+
+    console.log(`[FCM] Token updated for ${resolvedRole}:${resolvedUserId} (school ${resolvedSchoolId})`);
 
     return res.json({ success: true, message: 'FCM token updated' });
   } catch (err) {

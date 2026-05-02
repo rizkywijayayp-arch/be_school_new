@@ -33,12 +33,63 @@ const tenantMiddleware = async (req, res, next) => {
   }
 };
 
-// Middleware untuk enforce tenant (paksa schoolId dari query/body/header)
-const enforceTenant = (req, res, next) => {
-  const schoolId = req.query.schoolId || req.body.schoolId || req.headers['x-school-id'];
-  if (schoolId) {
-    req.enforcedSchoolId = schoolId;
+/**
+ * enforceTenant — enforces tenant isolation on API routes.
+ *
+ * Priority 1: X-School-Id header (explicit, from client)
+ *   → Must match req.user.sekolahId from JWT payload
+ *   → 403 TENANT_MISMATCH if mismatch
+ *
+ * Priority 2: Domain-based schoolId (set by tenantMiddleware)
+ *   → Used when no X-School-Id header is present
+ *
+ * Blocking: schoolId in query/body without X-School-Id header
+ *   → 403 PARAM_INJECTION_BLOCKED (prevents tenant confusion attacks)
+ */
+const enforceTenant = async (req, res, next) => {
+  const hasSchoolIdHeader = !!req.headers['x-school-id'];
+  const querySchoolId = req.query.schoolId;
+  const bodySchoolId = req.body?.schoolId;
+
+  // ── Block param injection ───────────────────────────────────
+  // If schoolId appears in query/body but no X-School-Id header,
+  // it's suspicious — the client is trying to override tenant via params.
+  if (!hasSchoolIdHeader && (querySchoolId || bodySchoolId)) {
+    return res.status(403).json({
+      success: false,
+      message: 'schoolId cannot be passed via query/body without X-School-Id header',
+      code: 'PARAM_INJECTION_BLOCKED'
+    });
   }
+
+  // ── Validate header vs JWT (if header is present) ────────────
+  if (hasSchoolIdHeader) {
+    const headerSchoolId = parseInt(req.headers['x-school-id'], 10);
+
+    if (req.user?.sekolahId !== undefined) {
+      if (headerSchoolId !== req.user.sekolahId) {
+        return res.status(403).json({
+          success: false,
+          message: 'X-School-Id does not match authenticated tenant',
+          code: 'TENANT_MISMATCH',
+          detail: {
+            headerSchoolId,
+            jwtSchoolId: req.user.sekolahId
+          }
+        });
+      }
+    }
+
+    // Use the validated header schoolId
+    req.enforcedSchoolId = headerSchoolId;
+    return next();
+  }
+
+  // ── Fall back to domain-based (set by tenantMiddleware) ──────
+  if (req.schoolId) {
+    req.enforcedSchoolId = parseInt(req.schoolId, 10);
+  }
+
   next();
 };
 

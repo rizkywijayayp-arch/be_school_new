@@ -71,7 +71,8 @@ router.put('/:id', validateApiKey, async (req, res) => {
 // Delete permohonan (soft delete)
 router.delete('/:id', validateApiKey, permohonanController.deletePermohonan);
 
-// Get stats
+// Get stats (dashboard summary)
+router.get('/stats', validateApiKey, permohonanController.getStats);
 router.get('/stats/summary', validateApiKey, permohonanController.getStats);
 
 module.exports = router;

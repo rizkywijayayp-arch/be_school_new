@@ -58,4 +58,9 @@ router.post('/import', upload.single('file'), kelulusanController.importExcel);
 // Announcement settings
 router.post('/announcement', kelulusanController.setAnnouncementDate);
 
+// Auto-promote + alumni pipeline
+router.post('/promote', kelulusanController.promoteStudents);
+router.get('/promote-preview', kelulusanController.getPromotionPreview);
+router.post('/promote-to-alumni', kelulusanController.promoteToAlumni);
+
 module.exports = router;

@@ -1127,3 +1127,80 @@ exports.getPromotionPreview = async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }
 };
+
+// Bulk promote graduates to alumni
+exports.promoteToAlumni = async (req, res) => {
+  try {
+    const schoolId = req.schoolId || req.enforcedSchoolId || parseInt(req.query.schoolId) || null;
+    const { kelulusanIds = [], jenjang } = req.body;
+
+    if (!schoolId) {
+      return res.status(400).json({
+        success: false,
+        message: 'SchoolId tidak ditemukan.'
+      });
+    }
+
+    const parsedSchoolId = parseInt(schoolId);
+    const tahunLulus = new Date().getFullYear();
+
+    let kelulusanList;
+    if (kelulusanIds.length > 0) {
+      kelulusanList = await Kelulusan.findAll({
+        where: { id: { [Op.in]: kelulusanIds }, schoolId: parsedSchoolId, isActive: true }
+      });
+    } else {
+      // Get all graduates for this school/jenjang
+      kelulusanList = await Kelulusan.findAll({
+        where: {
+          schoolId: parsedSchoolId,
+          status: 'lulus',
+          isActive: true,
+          ...(jenjang ? { jenjang } : {})
+        }
+      });
+    }
+
+    if (kelulusanList.length === 0) {
+      return res.json({ success: true, message: 'Tidak ada data kelulusan ditemukan', count: 0 });
+    }
+
+    let created = 0;
+    for (const kel of kelulusanList) {
+      const existing = await Alumni.findOne({
+        where: {
+          nis: kel.nis,
+          schoolId: parsedSchoolId,
+          graduationYear: kel.tahunLulus || tahunLulus,
+          isActive: true
+        }
+      });
+
+      if (!existing) {
+        await Alumni.create({
+          schoolId: parsedSchoolId,
+          nis: kel.nis,
+          name: kel.nama,
+          nisn: kel.nisn,
+          jenjang: kel.jenjang,
+          graduationYear: kel.tahunLulus || tahunLulus,
+          batch: String(kel.tahunLulus || tahunLulus),
+          isVerified: true,
+          isActive: true
+        });
+        created++;
+      }
+    }
+
+    console.log(`[PromoteToAlumni] School ${parsedSchoolId}: ${created} alumni created`);
+
+    res.json({
+      success: true,
+      message: `${created} alumni berhasil ditambahkan dari tabel kelulusan`,
+      count: created
+    });
+  } catch (error) {
+    console.error('Error promoteToAlumni:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};

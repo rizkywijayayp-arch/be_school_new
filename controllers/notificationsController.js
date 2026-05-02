@@ -224,26 +224,27 @@ class NotificationsController {
     }
   }
 
-  // Get notifications for current logged user
+  // Get notifications for current logged user (or anonymous — schoolId only)
   async getMyNotifications(req, res) {
     try {
-      const userId = req.user.id;
-      const userType = req.user.userType || 'admin';
       const { limit = 50, schoolId } = req.query;
-      const enforcedSchoolId = schoolId || req.enforcedSchoolId || req.user.schoolId;
+      const enforcedSchoolId = req.enforcedSchoolId || req.schoolId || schoolId;
 
-      const where = {};
-
-      // Filter by user
-      if (userType === 'admin') {
-        where.userType = 'admin';
-      } else {
-        where.userId = userId;
-        where.userType = userType;
+      if (!enforcedSchoolId) {
+        return res.status(400).json({ success: false, message: 'schoolId wajib diisi' });
       }
 
-      if (enforcedSchoolId) {
-        where.schoolId = enforcedSchoolId;
+      const where = { schoolId: enforcedSchoolId };
+
+      // If user is authenticated, show their notifications
+      // If not (anonymous), still return an empty array (no crash)
+      if (req.user?.id) {
+        const userType = req.user.userType || 'admin';
+        if (userType !== 'admin') {
+          where.userId = req.user.id;
+          where.userType = userType;
+        }
+        // Admins see all school notifications — no extra filter needed
       }
 
       const notifications = await Notifications.findAll({
@@ -261,28 +262,29 @@ class NotificationsController {
   // Get unread count for current user
   async getUnreadCount(req, res) {
     try {
-      const userId = req.user.id;
-      const userType = req.user.userType || 'admin';
       const { schoolId } = req.query;
-      const enforcedSchoolId = schoolId || req.enforcedSchoolId || req.user.schoolId;
+      const enforcedSchoolId = req.enforcedSchoolId || req.schoolId || schoolId;
+
+      if (!enforcedSchoolId) {
+        return res.status(400).json({ success: false, message: 'schoolId wajib diisi' });
+      }
 
       const where = {
         isRead: false,
+        schoolId: enforcedSchoolId,
       };
 
-      if (userType === 'admin') {
-        where.userType = 'admin';
+      if (req.user?.id && req.user?.userType !== 'admin') {
+        where.userId = req.user.id;
+        where.userType = req.user.userType;
+      } else if (!req.user?.id) {
+        // Anonymous: return 0 (no auth needed for count)
+        return res.json({ success: true, data: { count: 0 } });
       } else {
-        where.userId = userId;
-        where.userType = userType;
-      }
-
-      if (enforcedSchoolId) {
-        where.schoolId = enforcedSchoolId;
+        where.userType = 'admin';
       }
 
       const count = await Notifications.count({ where });
-
       return res.json({ success: true, data: { count } });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
@@ -292,23 +294,28 @@ class NotificationsController {
   // Mark all read for current user
   async markAllReadMine(req, res) {
     try {
-      const userId = req.user.id;
-      const userType = req.user.userType || 'admin';
+      const userId = req.user?.id;
+      const userType = req.user?.userType || 'admin';
       const { schoolId } = req.query;
-      const enforcedSchoolId = schoolId || req.enforcedSchoolId || req.user.schoolId;
+      const enforcedSchoolId = req.enforcedSchoolId || req.schoolId || schoolId;
+
+      if (!enforcedSchoolId) {
+        return res.status(400).json({ success: false, message: 'schoolId wajib diisi' });
+      }
+      if (!userId) {
+        return res.status(401).json({ success: false, message: 'Auth required for this action' });
+      }
 
       const where = {};
 
-      if (userType === 'admin') {
-        where.userType = 'admin';
-      } else {
+      if (userType !== 'admin') {
         where.userId = userId;
         where.userType = userType;
+      } else {
+        where.userType = 'admin';
       }
 
-      if (enforcedSchoolId) {
-        where.schoolId = enforcedSchoolId;
-      }
+      where.schoolId = enforcedSchoolId;
 
       await Notifications.update(
         { isRead: 1 },

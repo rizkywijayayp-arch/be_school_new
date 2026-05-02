@@ -4,9 +4,9 @@ const notificationsController = require('../controllers/notificationsController'
 const { protect } = require('../middlewares/protect');
 const optionalAuth = require('../middlewares/optionalLimiter');
 
-// Get notifications for current logged user
-router.get('/', protect, notificationsController.getMyNotifications);
-router.get('/unread-count', protect, notificationsController.getUnreadCount);
+// Get notifications — auth optional so admin bell works without login stutter
+router.get('/', optionalAuth, notificationsController.getMyNotifications);
+router.get('/unread-count', optionalAuth, notificationsController.getUnreadCount);
 
 // Get by user (legacy support)
 router.get('/user/:userId', optionalAuth, notificationsController.getByUser);

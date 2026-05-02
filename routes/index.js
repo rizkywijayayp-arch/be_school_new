@@ -77,6 +77,7 @@ const biodataSiswaRouter = require('./biodataSiswaRoutes'); // biodata-siswa-new
 const barcodeAbsenRouter = require('./barcodeAbsenRoutes'); // create-barcode-absen
 const attendancesRouter = require('./attendancesRoutes'); // attendances
 const manualAttendanceRouter = require('./manualAttendanceRoutes'); // absen-masuk/pulang-manual
+const tvRouter = require('./tvRoutes'); // Presence TV heartbeat & status
 const mataPelajaranRouter = require('./mataPelajaranRoutes'); // mata-pelajaran
 
     router.use('/auth', require('./authRoutes'));
@@ -147,6 +148,7 @@ const mataPelajaranRouter = require('./mataPelajaranRoutes'); // mata-pelajaran
     router.use('/absen-masuk-manual', manualAttendanceRouter); // manual check-in
     router.use('/absen-pulang-manual', manualAttendanceRouter); // manual check-out
     router.use('/mata-pelajaran', mataPelajaranRouter); // mata pelajaran / guru-mapel
+    router.use('/tv', tvRouter); // Presence TV heartbeat & status
     router.use('/izin', izinRouter);
     router.use('/presence', presenceRouter);
     router.use('/presence', presenceHistoryRouter); // /presence/history, /presence/stats

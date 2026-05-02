@@ -336,9 +336,11 @@ exports.getStats = async (req, res) => {
 
     res.json({
       success: true,
-      data: {
+      stats: {
         total,
         pending: pendingCount,
+        diproses: statusCounts.find(s => s.status === 'diproses')?.count || 0,
+        selesai: statusCounts.find(s => s.status === 'selesai')?.count || 0,
         recent: recentCount,
         byStatus: statusCounts,
         topJenis

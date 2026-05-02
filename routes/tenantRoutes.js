@@ -6,6 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const Tenant = require('../models/tenant');
+const { sequelize } = require('../config/database');
 const { generateApiKey, generateApiSecret, hashSecret, validateAdminKey } = require('../middlewares/apiKeyAuth');
 
 // ============================================================
@@ -638,4 +639,134 @@ function formatBytes(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-module.exports = router;
+/**
+ * POST /sso/launch
+ *
+ * SSO auto-login from Command Center dashboard (admin-kira-admin-new).
+ *
+ * Query params:
+ *   admin_token  — JWT token from localStorage (command center admin)
+ *   school_id    — Target tenant schoolId
+ *   origin       — Origin label (e.g. "command-center")
+ *   ts           — Unix ms timestamp (for replay protection)
+ *
+ * Response:
+ *   - GET: redirects to target app with session cookie set
+ *   - JSON (fallback): { success: true, redirectUrl }
+ */
+router.post('/sso/launch', async (req, res) => {
+  try {
+    const { admin_token, school_id, origin, ts } = req.query;
+
+    // ── Basic validation ─────────────────────────────────────
+    if (!admin_token || !school_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'admin_token dan school_id wajib ada',
+        code: 'MISSING_SSO_PARAMS'
+      });
+    }
+
+    // ── Replay protection (link older than 5 minutes is rejected) ──
+    if (ts) {
+      const age = Date.now() - parseInt(ts, 10);
+      if (age > 5 * 60 * 1000) {
+        return res.status(410).json({
+          success: false,
+          message: 'SSO link sudah expired (lebih dari 5 menit)',
+          code: 'SSO_LINK_EXPIRED'
+        });
+      }
+    }
+
+    // ── Validate admin token ──────────────────────────────────
+    let decoded;
+    try {
+      const jwt = require('jsonwebtoken');
+      decoded = jwt.verify(admin_token, process.env.JWT_SECRET || 'kira-secret-key');
+    } catch {
+      return res.status(401).json({
+        success: false,
+        message: 'Token tidak valid atau sudah expired',
+        code: 'INVALID_ADMIN_TOKEN'
+      });
+    }
+
+    // ── Validate admin has access to this school ──────────────
+    const adminSchoolId = decoded.sekolahId ?? decoded.schoolId ?? decoded.id;
+    if (adminSchoolId !== parseInt(school_id, 10)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin tidak memiliki akses ke tenant ini',
+        code: 'SSO_ACCESS_DENIED'
+      });
+    }
+
+    // ── Fetch school domain ────────────────────────────────────
+    const [[schoolRow]] = await sequelize.query(
+      'SELECT domain, domain_web, domain_absensi, nama_sekolah FROM akunsekolah WHERE id = ? LIMIT 1',
+      { replacements: [parseInt(school_id, 10)] }
+    );
+
+    if (!schoolRow) {
+      return res.status(404).json({
+        success: false,
+        message: 'Tenant tidak ditemukan',
+        code: 'TENANT_NOT_FOUND'
+      });
+    }
+
+    const targetDomain = schoolRow.domain_absensi || schoolRow.domain_web || schoolRow.domain;
+    if (!targetDomain) {
+      return res.status(422).json({
+        success: false,
+        message: 'Tenant belum memiliki domain yang dikonfigurasi',
+        code: 'TENANT_NO_DOMAIN'
+      });
+    }
+
+    // ── Build session payload ──────────────────────────────────
+    const sessionPayload = {
+      userId:    decoded.userId ?? decoded.id,
+      sekolahId: parseInt(school_id, 10),
+      sekolah:   schoolRow.nama_sekolah,
+      role:      decoded.role ?? 'admin',
+      origin:    origin ?? 'command-center',
+      issuedAt:  Date.now(),
+      expiresAt: Date.now() + 2 * 60 * 60 * 1000, // 2 hours
+    };
+
+    const sessionToken = require('jsonwebtoken').sign(
+      sessionPayload,
+      process.env.JWT_SECRET || 'kira-secret-key',
+      { expiresIn: '2h' }
+    );
+
+    // ── Redirect to target app with session cookie ─────────────
+    const redirectUrl = `https://${targetDomain}/sso/callback?token=${sessionToken}`;
+
+    res.setHeader('Set-Cookie', [
+      `kira_sso=${sessionToken}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=7200`,
+      `kira_origin=${origin ?? 'command-center'}; Path=/; Max-Age=7200`
+    ]);
+
+    // If it's a GET request (browser redirect), do 302 redirect
+    // Otherwise return JSON for programmatic use
+    if (req.method === 'GET') {
+      return res.redirect(302, redirectUrl);
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: { redirectUrl },
+      message: 'SSO session created. Redirecting...'
+    });
+  } catch (err) {
+    console.error('[sso/launch] Error:', err.message);
+    return res.status(500).json({
+      success: false,
+      message: 'SSO launch gagal',
+      code: 'SSO_INTERNAL_ERROR'
+    });
+  }
+});
