@@ -90,6 +90,14 @@ const enforceTenant = async (req, res, next) => {
     req.enforcedSchoolId = parseInt(req.schoolId, 10);
   }
 
+  // If still no enforcedSchoolId but JWT contains schoolId → use it
+  // This covers cases where enforceTenant runs BEFORE protect middleware
+  // (e.g. routes that pass schoolId as query param — they include X-School-Id via interceptor)
+  // OR when protect hasn't run yet but JWT payload is available on req.user
+  if (!req.enforcedSchoolId && req.user?.schoolId) {
+    req.enforcedSchoolId = parseInt(req.user.schoolId, 10);
+  }
+
   next();
 };
 
