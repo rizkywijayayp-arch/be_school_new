@@ -182,7 +182,6 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // NOTE: Tenant middleware re-enabled 2026-05-03 after schema verification
 // schoolprofiles table exists with schoolId and domain columns ✓
-const { tenantMiddleware, enforceTenant } = require('./middlewares/tenant');
 
 // ── Tenant resolution via domain (non-API routes like landing pages) ──
 app.use(tenantMiddleware);
