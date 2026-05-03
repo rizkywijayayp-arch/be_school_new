@@ -770,3 +770,5 @@ router.post('/sso/launch', async (req, res) => {
     });
   }
 });
+
+module.exports = router;
