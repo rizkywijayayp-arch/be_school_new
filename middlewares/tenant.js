@@ -49,7 +49,7 @@ const tenantMiddleware = async (req, res, next) => {
 const enforceTenant = async (req, res, next) => {
   const hasSchoolIdHeader = !!req.headers['x-school-id'];
   const querySchoolId = req.query.schoolId;
-  const bodySchoolId = req.body?.schoolId;
+  const bodySchoolId = req.body && req.body.schoolId;
 
   // ── Block param injection ───────────────────────────────────
   // If schoolId appears in query/body but no X-School-Id header,
